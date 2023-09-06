@@ -21,7 +21,7 @@ RUN git config --global advice.detachedHead false
 
 # tcl: tip of core-8-branch
 WORKDIR /src/tcl
-RUN wget https://core.tcl-lang.org/tcl/tarball/93f005c985/tcl.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://core.tcl-lang.org/tcl/tarball/f7629abff2/tcl.tar.gz -O - | tar xz --strip-components=1
 RUN cd /src/tcl/unix && \
     ./configure CFLAGS="${CFLAGS}" --enable-64bit --enable-symbols && \
     make -j 8 all && \
@@ -49,7 +49,7 @@ RUN make install-binaries install-libraries clean && \
 FROM alpine-tcl-build-base AS package-jitc
 WORKDIR /src/jitc
 RUN apk add --no-cache --update libstdc++ libgcc
-RUN git clone -b v0.4 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
+RUN git clone -b v0.4.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tcc tools
 RUN make DESTDIR=/out install-binaries install-libraries
@@ -84,7 +84,7 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rl_http <<<
 FROM alpine-tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.14.9 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.14.10 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN make DESTDIR=/out install
 # package-rl_http >>>
 # package-brotli <<<
@@ -465,7 +465,7 @@ COPY --link --from=package-gc_class		/out /
 COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-tcllib		/out /
 COPY --link --from=package-chantricks	/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a5.2 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a6 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN make DESTDIR=/out install
 # package-aws >>>
 
