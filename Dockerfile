@@ -2,14 +2,14 @@ ARG ALPINE_VER="3.17.3"
 
 FROM alpine:$ALPINE_VER as base-amd64
 # Since Nov 2020 Lambda has supported AVX2 (and haswell) in all regions except China
-ARG CFLAGS="-O3 -march=haswell"
+ARG CFLAGS="-O3 -march=haswell -flto"
 
 FROM alpine:$ALPINE_VER as base-arm64
 # Target graviton2
-ARG CFLAGS="-O3 -moutline-atomics -march=armv8.2-a"
+ARG CFLAGS="-O3 -moutline-atomics -march=armv8.2-a -flto"
 
 FROM alpine:$ALPINE_VER as base-armv7
-ARG CFLAGS="-O3"
+ARG CFLAGS="-O3 -flto"
 
 # alpine-tcl-build <<<
 ARG TARGETARCH
@@ -24,7 +24,10 @@ WORKDIR /src/tcl
 RUN wget https://core.tcl-lang.org/tcl/tarball/f7629abff2/tcl.tar.gz -O - | tar xz --strip-components=1
 RUN cd /src/tcl/unix && \
     ./configure CFLAGS="${CFLAGS}" --enable-64bit --enable-symbols && \
-    make -j 8 all && \
+    make -j 8 all CFLAGS="${CFLAGS} -fprofile-generate=prof" && \
+    make test CFLAGS="${CFLAGS} -fprofile-generate=prof" && \
+    make clean && \
+    make -j 8 all CFLAGS="${CFLAGS} -fprofile-use=prof -Wno-coverage-mismatch" && \
     make install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers && \
     cp ../libtommath/tommath.h /usr/local/include/ && \
     ln -s /usr/local/bin/tclsh8.7 /usr/local/bin/tclsh && \
@@ -44,12 +47,25 @@ RUN ln -s ../tclconfig && autoconf && ./configure CFLAGS="${CFLAGS}" --enable-sy
 RUN make install-binaries install-libraries clean && \
     find . -type f -not -name '*.c' -and -not -name '*.h' -delete
 # alpine-tcl-build-base >>>
+# package-openssl <<<
+FROM base-$TARGETARCH AS package-openssl
+ARG CFLAGS
+RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libssl1.1 libcrypto1.1 libtool python3 pandoc pkgconfig git
+RUN git config --global advice.detachedHead false
+#FROM alpine-tcl-build-base AS package-openssl
+RUN apk add --no-cache --update perl linux-headers
+WORKDIR /src/openssl
+RUN wget https://www.openssl.org/source/openssl-1.1.1t.tar.gz -O - | tar xz --strip-components=1
+RUN ./config && \
+	make all && \
+	make DESTDIR=/out install
+# package-openssl >>>
 
 # package-jitc <<<
 FROM alpine-tcl-build-base AS package-jitc
 WORKDIR /src/jitc
 RUN apk add --no-cache --update libstdc++ libgcc
-RUN git clone -b v0.4.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
+RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tcc tools
 RUN make DESTDIR=/out install-binaries install-libraries
@@ -74,7 +90,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.10 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN git clone -b v0.11 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
 COPY --link --from=package-dedup /out /
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
@@ -402,15 +418,6 @@ RUN ln -s ../tclconfig && \
     make -j 8 all && \
     make DESTDIR=/out install-binaries install-libraries clean
 # package-tdbc >>>
-# package-openssl <<<
-FROM alpine-tcl-build-base AS package-openssl
-RUN apk add --no-cache --update perl linux-headers
-WORKDIR /src/openssl
-RUN wget https://www.openssl.org/source/openssl-1.1.1t.tar.gz -O - | tar xz --strip-components=1
-RUN ./config && \
-	make all && \
-	make DESTDIR=/out install
-# package-openssl >>>
 # package-tcltls <<<
 FROM alpine-tcl-build-base AS package-tcltls
 #RUN apk add --no-cache --update --virtual build-dependencies curl openssl-dev curl-dev

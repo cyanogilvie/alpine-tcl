@@ -1,10 +1,13 @@
-VER=v0.9.71
+VER=v0.9.73
 PLATFORM=linux/arm64,linux/amd64
 DEST=--push
 
 CONTAINER_ENV = -v "`pwd`/here:/here" --network host --ulimit core=-1
 
 all: alpine-tcl
+
+ubuntu-tcl: Dockerfile.ubuntu
+	docker buildx build $(DEST) --target ubuntu-tcl-build-base --platform $(PLATFORM) -t cyanogilvie/ubuntu-tcl:$(VER)-stripped -f Dockerfile.ubuntu .
 
 alpine-tcl: Dockerfile
 	#docker buildx build --target alpine-tcl-build --platform linux/amd64 -t alpine-tcl-build .
