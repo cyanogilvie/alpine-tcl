@@ -16,7 +16,7 @@ ARG TARGETARCH
 # alpine-tcl-build-base <<<
 FROM base-$TARGETARCH AS alpine-tcl-build-base
 ARG CFLAGS
-RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libssl1.1 libcrypto1.1 docker-cli git libtool python3 pandoc pkgconfig
+RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libssl1.1 libcrypto1.1 docker-cli git libtool python3 pandoc pkgconfig musl-obstack-dev
 RUN git config --global advice.detachedHead false
 
 # tcl: tip of core-8-branch
@@ -65,7 +65,7 @@ RUN ./config && \
 FROM alpine-tcl-build-base AS package-jitc
 WORKDIR /src/jitc
 RUN apk add --no-cache --update libstdc++ libgcc
-RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
+RUN git clone -b v0.5.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tcc tools
 RUN make DESTDIR=/out install-binaries install-libraries
@@ -90,7 +90,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.13 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN git clone -b v0.13.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
 COPY --link --from=package-dedup /out /
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
@@ -209,7 +209,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-rl_json <<<
 FROM alpine-tcl-build-base AS package-rl_json
 WORKDIR /src/rl_json
-RUN git clone --recurse-submodules --shallow-submodules --branch 0.12.2 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
+RUN git clone --recurse-submodules --shallow-submodules --branch 0.14 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
     make -j 8 all && \
     make DESTDIR=/out install-binaries install-libraries clean
@@ -283,7 +283,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-chantricks <<<
 FROM alpine-tcl-build-base AS package-chantricks
 WORKDIR /src/chantricks
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.4 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.5 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
 RUN make DESTDIR=/out install-tm
 # package-chantricks >>>
 # package-openapi <<<
@@ -475,6 +475,27 @@ COPY --link --from=package-chantricks	/out /
 RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a6 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN make DESTDIR=/out install
 # package-aws >>>
+# aklomp/base64 <<<
+FROM alpine-tcl-build-base AS aklomp-base64
+ARG CFLAGS
+ARG TARGETARCH
+WORKDIR /src/aklomp_base64
+RUN wget https://github.com/aklomp/base64/archive/e77bd70bdd860c52c561568cffb251d88bba064c.tar.gz -O - | tar xz --strip-components=1
+#RUN	if [ "${TARGETARCH}" = "arm64" ]; \
+#	then \
+#		apk add --no-cache --update clang; \
+#	fi
+#RUN make CC=clang CFLAGS="${CFLAGS}" NEON64_CFLAGS=" "
+#RUN mkdir -p /out/usr/local/lib; clang -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o
+RUN	if [ "${TARGETARCH}" = "arm64" ]; \
+	then \
+		CC=gcc CFLAGS="${CFLAGS}" NEON64_CFLAGS=" " make lib/config.h lib/libbase64.o && \
+		mkdir -p /out/usr/local/lib; gcc -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o; \
+	else \
+		AVX2_CFLAGS=-mavx2 SSSE3_CFLAGS=-mssse3 SSE41_CFLAGS=-msse4.1 SSE42_CFLAGS=-msse4.2 AVX_CFLAGS=-mavx make lib/config.h lib/libbase64.o && \
+		mkdir -p /out/usr/local/lib; gcc -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o; \
+	fi
+# aklomp/base64 >>>
 
 FROM alpine-tcl-build-base AS alpine-tcl-build
 COPY --link --from=package-rl_http		/out /
@@ -523,6 +544,7 @@ COPY --link --from=package-tty			/out /
 COPY --link --from=package-flock		/out /
 COPY --link --from=package-aio			/out /
 COPY --link --from=package-aws			/out /
+COPY --link --from=aklomp-base64		/out /
 
 # misc local bits
 COPY tcl/tm /usr/local/lib/tcl8/site-tcl
@@ -548,7 +570,7 @@ RUN find /usr -name "*.so" -exec strip {} \;
 
 # alpine-tcl <<<
 FROM alpine:$ALPINE_VER AS alpine-tcl
-RUN apk add --no-cache --update musl-dev readline libjpeg-turbo libexif libpng libwebp tiff ncurses ncurses-libs libstdc++ libgcc brotli && \
+RUN apk add --no-cache --update musl-dev readline libjpeg-turbo libexif libpng libwebp tiff ncurses ncurses-libs libstdc++ libgcc brotli musl-obstack-dev && \
 	rm /usr/lib/libc.a
 COPY --from=alpine-tcl-build /usr/local /usr/local
 COPY --from=alpine-tcl-build /root/.tclshrc /root/
@@ -559,7 +581,7 @@ ENTRYPOINT ["tclsh"]
 
 # alpine-tcl-stripped <<<
 FROM alpine:$ALPINE_VER AS alpine-tcl-stripped
-RUN apk add --no-cache --update musl-dev readline libjpeg-turbo libexif libpng libwebp tiff ncurses ncurses-libs libstdc++ libgcc && \
+RUN apk add --no-cache --update musl-dev readline libjpeg-turbo libexif libpng libwebp tiff ncurses ncurses-libs libstdc++ libgcc musl-obstack-dev brotli && \
 	rm /usr/lib/libc.a
 COPY --from=alpine-tcl-build-stripped /usr/local /usr/local
 COPY --from=alpine-tcl-build-stripped /root/.tclshrc /root/
