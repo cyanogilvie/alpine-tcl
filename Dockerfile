@@ -209,7 +209,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-rl_json <<<
 FROM alpine-tcl-build-base AS package-rl_json
 WORKDIR /src/rl_json
-RUN git clone --recurse-submodules --shallow-submodules --branch 0.14 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
+RUN git clone --recurse-submodules --shallow-submodules --branch 0.15.1 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
     make -j 8 all && \
     make DESTDIR=/out install-binaries install-libraries clean
@@ -487,14 +487,17 @@ RUN wget https://github.com/aklomp/base64/archive/e77bd70bdd860c52c561568cffb251
 #	fi
 #RUN make CC=clang CFLAGS="${CFLAGS}" NEON64_CFLAGS=" "
 #RUN mkdir -p /out/usr/local/lib; clang -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o
+RUN mkdir -p /out/usr/local/lib /out/usr/local/include
 RUN	if [ "${TARGETARCH}" = "arm64" ]; \
 	then \
 		CC=gcc CFLAGS="${CFLAGS}" NEON64_CFLAGS=" " make lib/config.h lib/libbase64.o && \
-		mkdir -p /out/usr/local/lib; gcc -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o; \
+		gcc -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o; \
 	else \
 		AVX2_CFLAGS=-mavx2 SSSE3_CFLAGS=-mssse3 SSE41_CFLAGS=-msse4.1 SSE42_CFLAGS=-msse4.2 AVX_CFLAGS=-mavx make lib/config.h lib/libbase64.o && \
-		mkdir -p /out/usr/local/lib; gcc -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o; \
+		gcc -shared -o /out/usr/local/lib/libaklompbase64.so lib/libbase64.o; \
 	fi
+RUN cp lib/libbase64.o /out/usr/local/lib
+RUN cp include/libbase64.h /out/usr/local/include
 # aklomp/base64 >>>
 
 FROM alpine-tcl-build-base AS alpine-tcl-build
@@ -560,6 +563,54 @@ COPY common_sighandler-*.tm /usr/local/lib/tcl8/site-tcl/
 # alpine-tcl-gdb <<<
 FROM alpine-tcl-build as alpine-tcl-gdb
 RUN apk add --no-cache --update gdb vim
+COPY --link --from=alpine-tcl-build-base	/src /src
+COPY --link --from=package-rl_http		/src /src
+COPY --link --from=package-dedup		/src /src
+COPY --link --from=package-jitc			/src /src
+COPY --link --from=package-pgwire		/src /src
+COPY --link --from=package-reuri		/src /src
+COPY --link --from=package-brotli		/src /src
+COPY --link --from=package-rltest		/src /src
+COPY --link --from=package-names		/src /src
+COPY --link --from=package-prng			/src /src
+COPY --link --from=package-sqlite3		/src /src
+COPY --link --from=package-pixel		/src /src
+COPY --link --from=package-tdom			/src /src
+COPY --link --from=package-parse_args	/src /src
+COPY --link --from=package-rl_json		/src /src
+COPY --link --from=package-hash			/src /src
+COPY --link --from=package-unix_sockets	/src /src
+COPY --link --from=package-tclreadline	/src /src
+COPY --link --from=package-tclsignal	/src /src
+COPY --link --from=package-type			/src /src
+COPY --link --from=package-inotify		/src /src
+COPY --link --from=package-parsetcl		/src /src
+COPY --link --from=package-ck			/src /src
+COPY --link --from=package-resolve		/src /src
+COPY --link --from=package-tcllib		/src /src
+COPY --link --from=package-tdbc			/src /src
+COPY --link --from=package-openssl		/src /src
+COPY --link --from=package-tcltls		/src /src
+COPY --link --from=package-sockopt		/src /src
+COPY --link --from=package-chantricks	/src /src
+COPY --link --from=package-openapi		/src /src
+COPY --link --from=package-docker		/src /src
+COPY --link --from=package-gc_class		/src /src
+COPY --link --from=package-tbuild		/src /src
+COPY --link --from=package-cflib		/src /src
+COPY --link --from=package-sop			/src /src
+COPY --link --from=package-netdgram		/src /src
+COPY --link --from=package-evlog		/src /src
+COPY --link --from=package-dsl			/src /src
+COPY --link --from=package-logging		/src /src
+COPY --link --from=package-crypto		/src /src
+COPY --link --from=package-datasource	/src /src
+COPY --link --from=package-m2			/src /src
+COPY --link --from=package-tty			/src /src
+COPY --link --from=package-flock		/src /src
+COPY --link --from=package-aio			/src /src
+COPY --link --from=package-aws			/src /src
+COPY --link --from=aklomp-base64		/src /src
 WORKDIR /here
 # alpine-tcl-gdb >>>
 
