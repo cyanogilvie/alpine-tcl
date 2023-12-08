@@ -55,7 +55,7 @@ RUN git config --global advice.detachedHead false
 #FROM alpine-tcl-build-base AS package-openssl
 RUN apk add --no-cache --update perl linux-headers
 WORKDIR /src/openssl
-RUN wget https://www.openssl.org/source/openssl-1.1.1t.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://www.openssl.org/source/openssl-1.1.1w.tar.gz -O - | tar xz --strip-components=1
 RUN ./config && \
 	make all && \
 	make DESTDIR=/out install
@@ -100,7 +100,7 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rl_http <<<
 FROM alpine-tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.14.10 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.14.12 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN make DESTDIR=/out install
 # package-rl_http >>>
 # package-brotli <<<
@@ -472,7 +472,7 @@ COPY --link --from=package-gc_class		/out /
 COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-tcllib		/out /
 COPY --link --from=package-chantricks	/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a6 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a8 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN make DESTDIR=/out install
 # package-aws >>>
 # aklomp/base64 <<<
