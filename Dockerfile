@@ -303,7 +303,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-tcllib <<<
 FROM alpine-tcl-build-base AS package-tcllib
 WORKDIR /src/tcllib
-RUN wget https://core.tcl-lang.org/tcllib/uv/tcllib-1.21.tar.gz -O - | tar xz --strip-components=1
+RUN git clone -b cyan-1-21-2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcllib .
 RUN ./configure && make DESTDIR=/out install-libraries install-applications clean
 # package-tcllib >>>
 # package-docker <<<
