@@ -70,6 +70,13 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tcc tools
 RUN make DESTDIR=/out install-binaries install-libraries
 # package-jitc >>>
+# package-tomcrypt <<<
+FROM alpine-tcl-build-base AS package-tomcrypt
+WORKDIR /src/tomcrypt
+RUN git clone -b v0.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tomcrypt .
+RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
+RUN make DESTDIR=/out install-binaries install-libraries
+# package-tomcrypt >>>
 # package-pgwire <<<
 FROM alpine-tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
@@ -504,6 +511,7 @@ FROM alpine-tcl-build-base AS alpine-tcl-build
 COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-dedup		/out /
 COPY --link --from=package-jitc			/out /
+COPY --link --from=package-tomcrypt		/out /
 COPY --link --from=package-pgwire		/out /
 COPY --link --from=package-reuri		/out /
 COPY --link --from=package-brotli		/out /
