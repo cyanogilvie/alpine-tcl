@@ -12,7 +12,7 @@ ubuntu-tcl: Dockerfile.ubuntu
 alpine-tcl: Dockerfile
 	#docker buildx build --target alpine-tcl-build --platform linux/amd64 -t alpine-tcl-build .
 	#docker buildx build --target alpine-tcl --platform linux/amd64 -t cyanogilvie/alpine-tcl:$(VER) .
-	docker buildx build $(EXTRA) $(DEST) --target alpine-tcl-stripped --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-stripped .
+	docker buildx build $(EXTRA) $(DEST) --target alpine-tcl-stripped --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-stripped -t cyanogilvie/alpine-tcl:latest .
 
 alpine-tcl-gdb: Makefile Dockerfile
 	docker buildx build $(DEST) --target alpine-tcl-gdb --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-gdb .
