@@ -17,7 +17,7 @@ is pretty solid.
 Two architectures are provided x86_64 (with haswell optimization flags),
 and arm64 (optimized for the Graviton ARM hardware AWS uses).
 
-AWS Tcl Lambda Runtime
+AWS Lambda Tcl Runtime
 ----------------------
 
 AWS Lambda now supports using a container as the function code.  This repo
