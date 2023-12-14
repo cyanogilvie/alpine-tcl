@@ -1,0 +1,56 @@
+ARG UBUNTU_VER="22.04"
+
+FROM ubuntu:$UBUNTU_VER as base-amd64
+# Since Nov 2020 Lambda has supported AVX2 (and haswell) in all regions except China
+ARG CFLAGS="-O3 -march=haswell -flto"
+
+FROM ubuntu:$UBUNTU_VER as base-arm64
+# Target graviton2
+ARG CFLAGS="-O3 -moutline-atomics -march=armv8.2-a -flto"
+
+FROM ubuntu:$UBUNTU_VER as base-armv7
+ARG CFLAGS="-O3 -flto"
+
+# alpine-tcl-build <<<
+ARG TARGETARCH
+# alpine-tcl-build-base <<<
+FROM base-$TARGETARCH AS ubuntu-tcl-build-base
+ARG CFLAGS
+#RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libssl1.1 libcrypto1.1 docker-cli git libtool python3 pandoc pkgconfig
+RUN apt update && apt install -y --no-install-recommends build-essential autoconf git wget ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+#RUN apt update && apt install -y build-essential
+RUN git config --global advice.detachedHead false
+
+# tcl: tip of core-8-branch
+WORKDIR /src/tcl
+RUN wget https://core.tcl-lang.org/tcl/tarball/f7629abff2/tcl.tar.gz -O - | tar xz --strip-components=1
+RUN cd /src/tcl/unix && \
+    ./configure CFLAGS="${CFLAGS}" --enable-64bit --enable-symbols && \
+    make -j 8 all CFLAGS="${CFLAGS} -fprofile-generate=prof" && \
+    make test CFLAGS="${CFLAGS} -fprofile-generate=prof" && \
+    make clean && \
+    make -j 8 all CFLAGS="${CFLAGS} -fprofile-use=prof -Wno-coverage-mismatch" && \
+    make install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers && \
+    cp ../libtommath/tommath.h /usr/local/include/ && \
+    ln -s /usr/local/bin/tclsh8.7 /usr/local/bin/tclsh && \
+    make clean && \
+    mkdir /usr/local/lib/tcl8/site-tcl && \
+    find . -type f -not -name '*.c' -and -not -name '*.h' -delete
+
+# tclconfig: tip of trunk
+WORKDIR /src
+RUN wget https://core.tcl-lang.org/tclconfig/tarball/ed5ac018e8/tclconfig.tar.gz -O - | tar xz
+
+# thread: tip of thread-2-branch
+WORKDIR /src/thread
+#RUN apk add --no-cache --update zip
+RUN apt update && apt install -y --no-install-recommends zip && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN wget https://core.tcl-lang.org/thread/tarball/61e980ef5c/thread.tar.gz -O - | tar xz --strip-components=1
+RUN ln -s ../tclconfig && autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
+RUN make install-binaries install-libraries clean && \
+    find . -type f -not -name '*.c' -and -not -name '*.h' -delete
+# alpine-tcl-build-base >>>
+
+# vim: foldmethod=marker foldmarker=<<<,>>>

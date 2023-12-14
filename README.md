@@ -8,17 +8,17 @@ easy to use this image as a base and bake in the ones you need).
 
 Notably, it contains the necessary packages to easily implement AWS Lambda
 functions in Tcl - rl_json for interacting with the JSON event descriptions,
-and aws 2, which covers most of the AWS service API (though not ec2 yet -
+and aws 2, which covers most of the AWS service API (though not ec2 -
 it uses a different protocol that I haven't implemented yet).
 
 It's in heavy production use at Ruby Lane, so I'm confident that the core
 is pretty solid.
 
-To architectures are provided x86_64 (with haswell optimization flags),
+Two architectures are provided x86_64 (with haswell optimization flags),
 and arm64 (optimized for the Graviton ARM hardware AWS uses).
 
-AWS-Tcl-Lambda
---------------
+AWS Tcl Lambda Runtime
+----------------------
 
 AWS Lambda now supports using a container as the function code.  This repo
 provides a base image that supplies a Tcl runtime that is compatible with
