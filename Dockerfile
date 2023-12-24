@@ -73,8 +73,10 @@ RUN make DESTDIR=/out install-binaries install-libraries
 # package-tomcrypt <<<
 FROM alpine-tcl-build-base AS package-tomcrypt
 WORKDIR /src/tomcrypt
-RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tomcrypt .
-RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
+#RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tomcrypt .
+#RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
+RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.5.3/tomcrypt0.5.3.tar.gz -O - | tar xz --strip-components=1
+RUN ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make DESTDIR=/out test install-binaries install-libraries
 # package-tomcrypt >>>
 # package-pgwire <<<
@@ -97,7 +99,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.13.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN git clone -b v0.13.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
 COPY --link --from=package-dedup /out /
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
