@@ -1,4 +1,4 @@
-ARG ALPINE_VER="3.17.3"
+ARG ALPINE_VER="3.19.1"
 
 FROM alpine:$ALPINE_VER as base-amd64
 # Since Nov 2020 Lambda has supported AVX2 (and haswell) in all regions except China
@@ -16,12 +16,12 @@ ARG TARGETARCH
 # alpine-tcl-build-base <<<
 FROM base-$TARGETARCH AS alpine-tcl-build-base
 ARG CFLAGS
-RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libssl1.1 libcrypto1.1 docker-cli git libtool python3 pandoc pkgconfig musl-obstack-dev
+RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates docker-cli git libtool python3 pandoc pkgconfig musl-obstack-dev
 RUN git config --global advice.detachedHead false
 
 # tcl: tip of core-8-branch
 WORKDIR /src/tcl
-RUN wget https://core.tcl-lang.org/tcl/tarball/f7629abff2/tcl.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://core.tcl-lang.org/tcl/tarball/0ed614424d/tcl.tar.gz -O - | tar xz --strip-components=1
 RUN cd /src/tcl/unix && \
     ./configure CFLAGS="${CFLAGS}" --enable-64bit --enable-symbols && \
     make -j 8 all CFLAGS="${CFLAGS} -fprofile-generate=prof" && \
@@ -50,7 +50,7 @@ RUN make install-binaries install-libraries clean && \
 # package-openssl <<<
 FROM base-$TARGETARCH AS package-openssl
 ARG CFLAGS
-RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libssl1.1 libcrypto1.1 libtool python3 pandoc pkgconfig git
+RUN apk add --no-cache --update build-base autoconf automake bsd-compat-headers bash ca-certificates libtool python3 pandoc pkgconfig git
 RUN git config --global advice.detachedHead false
 #FROM alpine-tcl-build-base AS package-openssl
 RUN apk add --no-cache --update perl linux-headers
@@ -75,7 +75,7 @@ FROM alpine-tcl-build-base AS package-tomcrypt
 WORKDIR /src/tomcrypt
 #RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tomcrypt .
 #RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
-RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.5.3/tomcrypt0.5.3.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.5.5/tomcrypt0.5.5.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make DESTDIR=/out test install-binaries install-libraries
 # package-tomcrypt >>>
@@ -109,7 +109,7 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rl_http <<<
 FROM alpine-tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.14.12 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.15.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN make DESTDIR=/out install
 # package-rl_http >>>
 # package-brotli <<<
@@ -430,8 +430,8 @@ RUN ln -s ../tclconfig && \
 # package-tcltls <<<
 FROM alpine-tcl-build-base AS package-tcltls
 #RUN apk add --no-cache --update --virtual build-dependencies curl openssl-dev curl-dev
-RUN apk add --no-cache --update --virtual build-dependencies curl curl-dev
-COPY --link --from=package-openssl		/out /
+RUN apk add --no-cache --update openssl1.1-compat-dev libssl1.1 libcrypto1.1 curl
+#COPY --link --from=package-openssl		/out /
 WORKDIR /src/tcltls
 RUN wget https://core.tcl-lang.org/tcltls/tarball/tls-1-7-22/tcltls.tar.gz -O - | tar xz --strip-components=1
 RUN ./autogen.sh && \
@@ -439,6 +439,16 @@ RUN ./autogen.sh && \
     make -j 8 all && \
     make DESTDIR=/out install clean
 # package-tcltls >>>
+# package-s2n <<<
+FROM alpine-tcl-build-base AS package-s2n
+WORKDIR /src/tcl-s2n
+RUN apk add --no-cache --update cmake
+RUN wget https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.4.1/tcl-s2n-0.4.1.tar.gz -O - | tar xz --strip-components=1
+RUN ./configure CFLAGS="-O3" --enable-symbols && \
+	make deps AR_ECHO="echo -e" && \
+    make DESTDIR=/out install-binaries install-libraries clean && \
+	rm -rf build local
+# package-s2n >>>
 # package-sockopt <<<
 FROM alpine-tcl-build-base AS package-sockopt
 COPY --link --from=package-rl_json /out /
@@ -481,7 +491,7 @@ COPY --link --from=package-gc_class		/out /
 COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-tcllib		/out /
 COPY --link --from=package-chantricks	/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a8 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a9 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN make DESTDIR=/out install
 # package-aws >>>
 # aklomp/base64 <<<
@@ -536,8 +546,9 @@ COPY --link --from=package-ck			/out /
 COPY --link --from=package-resolve		/out /
 COPY --link --from=package-tcllib		/out /
 COPY --link --from=package-tdbc			/out /
-COPY --link --from=package-openssl		/out /
-COPY --link --from=package-tcltls		/out /
+#COPY --link --from=package-openssl		/out /
+#COPY --link --from=package-tcltls		/out /
+COPY --link --from=package-s2n			/out /
 COPY --link --from=package-sockopt		/out /
 COPY --link --from=package-chantricks	/out /
 COPY --link --from=package-openapi		/out /
@@ -599,8 +610,9 @@ COPY --link --from=package-ck			/src /src
 COPY --link --from=package-resolve		/src /src
 COPY --link --from=package-tcllib		/src /src
 COPY --link --from=package-tdbc			/src /src
-COPY --link --from=package-openssl		/src /src
-COPY --link --from=package-tcltls		/src /src
+#COPY --link --from=package-openssl		/src /src
+#COPY --link --from=package-tcltls		/src /src
+COPY --link --from=package-s2n			/src /src
 COPY --link --from=package-sockopt		/src /src
 COPY --link --from=package-chantricks	/src /src
 COPY --link --from=package-openapi		/src /src

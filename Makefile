@@ -1,4 +1,4 @@
-VER=v0.9.85
+VER=v0.9.87
 PLATFORM=linux/arm64,linux/amd64
 DEST=--push
 
@@ -13,6 +13,12 @@ alpine-tcl: Dockerfile
 	#docker buildx build --target alpine-tcl-build --platform linux/amd64 -t alpine-tcl-build .
 	#docker buildx build --target alpine-tcl --platform linux/amd64 -t cyanogilvie/alpine-tcl:$(VER) .
 	docker buildx build $(EXTRA) $(DEST) --target alpine-tcl-stripped --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-stripped -t cyanogilvie/alpine-tcl:latest .
+
+alpine-tcl-build-base: Dockerfile
+	docker buildx build $(EXTRA) $(DEST) --target alpine-tcl-build-base --platform $(PLATFORM) -t alpine-tcl-build-base .
+
+alpine-tcl-build-base-arm64: Dockerfile
+	docker buildx build $(EXTRA) $(DEST) --target alpine-tcl-build-base --platform linux/arm64 -t alpine-tcl-build-base-arm64 .
 
 alpine-tcl-gdb: Makefile Dockerfile
 	docker buildx build $(DEST) --target alpine-tcl-gdb --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-gdb .
