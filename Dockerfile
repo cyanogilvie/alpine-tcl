@@ -491,7 +491,7 @@ COPY --link --from=package-gc_class		/out /
 COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-tcllib		/out /
 COPY --link --from=package-chantricks	/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a13 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a15 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN make DESTDIR=/out install
 # package-aws >>>
 # aklomp/base64 <<<
