@@ -443,7 +443,7 @@ RUN ./autogen.sh && \
 FROM alpine-tcl-build-base AS package-s2n
 WORKDIR /src/tcl-s2n
 RUN apk add --no-cache --update cmake
-RUN wget https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.4.1/tcl-s2n-0.4.1.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.5.1/tcl-s2n-0.5.1.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure CFLAGS="-O3" --enable-symbols && \
 	make deps AR_ECHO="echo -e" && \
     make DESTDIR=/out install-binaries install-libraries clean && \
