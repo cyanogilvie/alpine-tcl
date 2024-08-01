@@ -99,7 +99,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.13.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN git clone -b v0.13.6 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
 COPY --link --from=package-dedup /out /
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
@@ -218,7 +218,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-rl_json <<<
 FROM alpine-tcl-build-base AS package-rl_json
 WORKDIR /src/rl_json
-RUN git clone --recurse-submodules --shallow-submodules --branch 0.15.1 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
+RUN git clone --recurse-submodules --shallow-submodules --branch 0.15.2 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
     make -j 8 all && \
     make DESTDIR=/out install-binaries install-libraries clean
