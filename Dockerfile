@@ -99,7 +99,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.13.4 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN git clone -b v0.13.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
 COPY --link --from=package-dedup /out /
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
@@ -292,7 +292,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-chantricks <<<
 FROM alpine-tcl-build-base AS package-chantricks
 WORKDIR /src/chantricks
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.5 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.6 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
 RUN make DESTDIR=/out install-tm
 # package-chantricks >>>
 # package-openapi <<<
@@ -491,7 +491,7 @@ COPY --link --from=package-gc_class		/out /
 COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-tcllib		/out /
 COPY --link --from=package-chantricks	/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a15 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a16 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN make DESTDIR=/out install
 # package-aws >>>
 # aklomp/base64 <<<

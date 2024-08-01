@@ -1,4 +1,4 @@
-VER=v0.9.97
+VER=v0.9.99
 PLATFORM=linux/arm64,linux/amd64
 DEST=--push
 
