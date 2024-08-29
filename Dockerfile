@@ -82,7 +82,7 @@ RUN make DESTDIR=/out test install-binaries install-libraries
 # package-pgwire <<<
 FROM alpine-tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b25 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b26 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all && \
 	mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
@@ -518,6 +518,12 @@ RUN	if [ "${TARGETARCH}" = "arm64" ]; \
 RUN cp lib/libbase64.o /out/usr/local/lib
 RUN cp include/libbase64.h /out/usr/local/include
 # aklomp/base64 >>>
+# package-mtag_stack <<<
+#FROM alpine-tcl-build-base AS package-mtag_stack
+#WORKDIR /src/mtag_stack
+#RUN wget https://github.com/cyanogilvie/mtag_stack/releases/download/v2.0/mtag_stack2.0.tar.gz -O - | tar xz --strip-components=1
+#RUN make CFLAGS_OPTIMIZE="${CFLAGS}" DESTDIR=/out clean pgo install clean
+# package-mtag_stack >>>
 
 FROM alpine-tcl-build-base AS alpine-tcl-build
 COPY --link --from=package-rl_http		/out /
@@ -569,6 +575,7 @@ COPY --link --from=package-flock		/out /
 COPY --link --from=package-aio			/out /
 COPY --link --from=package-aws			/out /
 COPY --link --from=aklomp-base64		/out /
+#COPY --link --from=package-mtag_stack	/out /
 
 # misc local bits
 COPY tcl/tm /usr/local/lib/tcl8/site-tcl
