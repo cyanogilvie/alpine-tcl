@@ -65,7 +65,7 @@ RUN ./config && \
 FROM alpine-tcl-build-base AS package-jitc
 WORKDIR /src/jitc
 RUN apk add --no-cache --update libstdc++ libgcc
-RUN git clone -b v0.5.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
+RUN git clone -b v0.5.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tcc tools
 RUN make DESTDIR=/out install-binaries install-libraries
