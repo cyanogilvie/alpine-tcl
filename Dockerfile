@@ -109,7 +109,7 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rl_http <<<
 FROM alpine-tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.15.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.16 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN make DESTDIR=/out install
 # package-rl_http >>>
 # package-brotli <<<
