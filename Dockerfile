@@ -82,7 +82,7 @@ RUN make DESTDIR=/out test install-binaries install-libraries
 # package-pgwire <<<
 FROM alpine-tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b26 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b28 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all && \
 	mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
