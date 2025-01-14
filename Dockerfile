@@ -75,7 +75,7 @@ FROM alpine-tcl-build-base AS package-tomcrypt
 WORKDIR /src/tomcrypt
 #RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tomcrypt .
 #RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
-RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.5.5/tomcrypt0.5.5.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.5.6/tomcrypt0.5.6.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make DESTDIR=/out test install-binaries install-libraries
 # package-tomcrypt >>>
