@@ -73,9 +73,7 @@ RUN make DESTDIR=/out install-binaries install-libraries
 # package-tomcrypt <<<
 FROM alpine-tcl-build-base AS package-tomcrypt
 WORKDIR /src/tomcrypt
-#RUN git clone -b v0.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tomcrypt .
-#RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
-RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.6.0/tomcrypt0.6.0.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.6.1/tomcrypt0.6.1.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make DESTDIR=/out test install-binaries install-libraries
 # package-tomcrypt >>>
@@ -109,7 +107,7 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rl_http <<<
 FROM alpine-tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.18 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.19 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN make DESTDIR=/out install
 # package-rl_http >>>
 # package-brotli <<<
