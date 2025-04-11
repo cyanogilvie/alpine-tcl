@@ -65,7 +65,7 @@ RUN ./config && \
 FROM alpine-tcl-build-base AS package-jitc
 WORKDIR /src/jitc
 RUN apk add --no-cache --update libstdc++ libgcc
-RUN git clone -b v0.5.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
+RUN git clone -b v0.5.6 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/jitc .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tcc tools
 RUN make DESTDIR=/out install-binaries install-libraries
@@ -522,6 +522,12 @@ RUN cp include/libbase64.h /out/usr/local/include
 #RUN wget https://github.com/cyanogilvie/mtag_stack/releases/download/v2.0/mtag_stack2.0.tar.gz -O - | tar xz --strip-components=1
 #RUN make CFLAGS_OPTIMIZE="${CFLAGS}" DESTDIR=/out clean pgo install clean
 # package-mtag_stack >>>
+# package-ip <<<
+FROM alpine-tcl-build-base AS package-ip
+WORKDIR /src/ip
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.2 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-ip .
+RUN make DESTDIR=/out install-tm
+# package-ip >>>
 
 FROM alpine-tcl-build-base AS alpine-tcl-build
 COPY --link --from=package-rl_http		/out /
@@ -574,6 +580,7 @@ COPY --link --from=package-aio			/out /
 COPY --link --from=package-aws			/out /
 COPY --link --from=aklomp-base64		/out /
 #COPY --link --from=package-mtag_stack	/out /
+COPY --link --from=package-ip			/out /
 
 # misc local bits
 COPY tcl/tm /usr/local/lib/tcl8/site-tcl
@@ -638,6 +645,8 @@ COPY --link --from=package-flock		/src /src
 COPY --link --from=package-aio			/src /src
 COPY --link --from=package-aws			/src /src
 COPY --link --from=aklomp-base64		/src /src
+#COPY --link --from=package-mtag_stack	/src /src
+COPY --link --from=package-ip			/src /src
 WORKDIR /here
 # alpine-tcl-gdb >>>
 
