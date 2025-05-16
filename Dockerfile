@@ -216,7 +216,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-rl_json <<<
 FROM alpine-tcl-build-base AS package-rl_json
 WORKDIR /src/rl_json
-RUN git clone --recurse-submodules --shallow-submodules --branch 0.15.2 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
+RUN git clone --recurse-submodules --shallow-submodules --branch 0.15.3 --single-branch --depth 1 https://github.com/RubyLane/rl_json .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
     make -j 8 all && \
     make DESTDIR=/out install-binaries install-libraries clean
@@ -290,7 +290,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-chantricks <<<
 FROM alpine-tcl-build-base AS package-chantricks
 WORKDIR /src/chantricks
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.6 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.7 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
 RUN make DESTDIR=/out install-tm
 # package-chantricks >>>
 # package-openapi <<<
