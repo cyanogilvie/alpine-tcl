@@ -97,7 +97,7 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.13.7 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN git clone -b v0.14 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
 COPY --link --from=package-dedup /out /
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
