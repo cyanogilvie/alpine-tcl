@@ -89,7 +89,7 @@ RUN make all && \
 # package-dedup <<<
 FROM alpine-tcl-build-base AS package-dedup
 WORKDIR /src/dedup
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.5 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.7 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
 RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
     make DESTDIR=/out install-binaries install-libraries clean && \
     cp /out/usr/local/lib/dedup*/dedupConfig.sh /out/usr/local/lib/
@@ -97,9 +97,9 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols && \
 # package-reuri <<<
 FROM alpine-tcl-build-base AS package-reuri
 WORKDIR /src/reuri
-RUN git clone -b v0.14 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/reuri .
+RUN wget https://github.com/cyanogilvie/reuri/releases/download/v0.14.3/reuri0.14.3.tar.gz -O - | tar xz --strip-components=1
 COPY --link --from=package-dedup /out /
-RUN autoconf && ./configure CFLAGS="${CFLAGS}" --enable-symbols
+RUN ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make tools
 #RUN make DESTDIR=/out pgo install-binaries install-libraries clean
 RUN make DESTDIR=/out install-binaries install-libraries clean
