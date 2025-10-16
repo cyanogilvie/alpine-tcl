@@ -73,7 +73,7 @@ RUN make DESTDIR=/out install-binaries install-libraries
 # package-tomcrypt <<<
 FROM alpine-tcl-build-base AS package-tomcrypt
 WORKDIR /src/tomcrypt
-RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.8.2/tomcrypt0.8.2.tar.gz -O - | tar xz --strip-components=1
+RUN wget https://github.com/cyanogilvie/tcl-tomcrypt/releases/download/v0.8.3/tomcrypt0.8.3.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure CFLAGS="${CFLAGS}" --enable-symbols
 RUN make DESTDIR=/out test install-binaries install-libraries
 # package-tomcrypt >>>
