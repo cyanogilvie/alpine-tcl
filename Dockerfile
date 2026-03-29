@@ -1,5 +1,6 @@
 ARG DIST=alpine
 ARG TCLVER=8.7
+ARG TCLCOPYTARGET
 
 # Alpine linux <<<
 #FROM alpine:3.20.3 AS src-alpine
@@ -17,30 +18,39 @@ RUN echo LANG=C.UTF-8 > /etc/locale.conf
 RUN echo /usr/local/lib > /etc/ld.so.conf.d/local.conf
 RUN ldconfig
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
-RUN echo -e "#!/bin/sh\ndnf install -q -y freetype libX11-xcb librsvg2 libwebp libexif libpng libtiff brotli ncurses brotli libjpeg-turbo glibc-devel" > /usr/local/bin/install-deps.sh && \
-	chmod +x /usr/local/bin/install-deps.sh
-RUN /usr/local/bin/install-deps.sh
+#RUN echo -e "#!/bin/sh\ndnf install -q -y freetype libX11-xcb librsvg2 libwebp libexif libpng libtiff brotli ncurses brotli libjpeg-turbo glibc-devel" > /usr/local/bin/install-deps.sh && \
+#	chmod +x /usr/local/bin/install-deps.sh
+#RUN /usr/local/bin/install-deps.sh
 
 FROM src-al2023 AS src-dev-al2023
 RUN dnf install -q -y \
-		autoconf \
 		automake \
 		cmake \
+		g++ \
 		gcc14 \
 		gcc14-c++ \
-		g++ \
 		git \
 		glibc-devel \
 		libtool \
+		openssl-devel \
+		python \
 		wget \
+		xz \
 		zip
-ARG CC=gcc14
+ARG CC=gcc14-gcc
 ARG CXX=gcc14-g++
 RUN ln -s /usr/bin/gcc14-gcc /usr/local/bin/gcc
 RUN ln -s /usr/bin/gcc14-gcc /usr/local/bin/cc
 RUN ln -s /usr/bin/gcc14-g++ /usr/local/bin/g++
 RUN ln -s /usr/bin/gcc14-g++ /usr/local/bin/c++
 RUN ln -s /usr/bin/gcc14-cpp /usr/local/bin/cpp
+
+# AL2023 packages an old autoconf (2.69), some of the things we need to build require 2.71+
+#RUN wget -q https://ftpmirror.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz -O - | tar xJ --strip-components=1
+WORKDIR /src/autoconf
+RUN wget -q https://ftpmirror.gnu.org/gnu/autoconf/autoconf-2.71.tar.xz -O - | tar xJ --strip-components=1
+RUN ./configure
+RUN make -j install
 # Amazon Linux 2023 >>>
 # Ubuntu 24.04 <<<
 FROM ubuntu:24.04@sha256:d22e4fb389065efa4a61bb36416768698ef6d955fe8a7e0cdb3cd6de80fa7eec AS src-ubuntu
@@ -544,81 +554,71 @@ COPY --link --from=base-build-zlib				/out /
 # tcl-build <<<
 # tcl-build-base <<<
 FROM base AS tcl-build-base-common
+ARG TCLVER
 RUN git config --global advice.detachedHead false
 
 # tcl9.0 <<<
 FROM tcl-build-base-common AS tcl-build-base-tcl9.0
-
 # tcl: core-9-0-2 tag
 WORKDIR /src/tcl
 RUN wget -q https://core.tcl-lang.org/tcl/tarball/core-9-0-2/tcl.tar.gz -O - | tar xz --strip-components=1
+ARG SITETCL=/usr/local/lib/tcl9/site-tcl
+# tclconfig: tip of main
+WORKDIR /src/tclconfig
+RUN wget -q https://core.tcl-lang.org/tclconfig/tarball/6e82b0097c/tclconfig.tar.gz -O - | tar xz --strip-components=1
+# thread: tip of main
+WORKDIR /src/thread
+RUN ln -s ../tclconfig
+RUN wget -q https://core.tcl-lang.org/thread/tarball/thread-3-0-4/thread.tar.gz -O - | tar xz --strip-components=1
+# tcl9.0 >>>
+# tcl8.7 <<<
+FROM tcl-build-base-common AS tcl-build-base-tcl8.7
+# tcl: tip of core-8-branch, now claimed to be defunct
+WORKDIR /src/tcl
+RUN wget -q https://core.tcl-lang.org/tcl/tarball/62ad42bba8/tcl.tar.gz -O - | tar xz --strip-components=1
+ARG SITETCL=/usr/local/lib/tcl8/site-tcl
+# tclconfig: tip of main
+WORKDIR /src/tclconfig
+RUN wget -q https://core.tcl-lang.org/tclconfig/tarball/6e82b0097c/tclconfig.tar.gz -O - | tar xz --strip-components=1
+## thread: tip of thread3-for-tcl8
+WORKDIR /src/thread
+RUN ln -s ../tclconfig
+RUN wget -q https://core.tcl-lang.org/thread/tarball/thread-20250902124430-586530a607.tar.gz -O - | tar xz --strip-components=1
+# tcl8.7 >>>
+FROM tcl-build-base-tcl${TCLVER} AS tcl-build-src
+
+FROM tcl-build-src AS tcl-build-base
 WORKDIR /src/tcl/unix
-RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-64bit --enable-symbols
+RUN ./configure CFLAGS="${CFLAGS_ARCH} -g" LDFLAGS="${LDFLAGS_ARCH}" --enable-64bit
 RUN make -j all CFLAGS="${CFLAGS_ARCH} -fprofile-generate=prof"
 RUN make test CFLAGS="${CFLAGS_ARCH} -fprofile-generate=prof"
 RUN make clean && make -j all CFLAGS="${CFLAGS_ARCH} -fprofile-use=prof -Wno-coverage-mismatch"
 #RUN make -j all
 RUN make install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers
-RUN make DESTDIR=/out install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers
+# Can't install to /out here or it pollutes /out for the package-* targets
+#RUN make DESTDIR=/out install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers
+RUN rm -rf *.o *.zip *.vfs
 #RUN cp ../libtommath/tommath.h /usr/local/include/
-RUN ln -s /usr/local/bin/tclsh9.0 /usr/local/bin/tclsh
-RUN ln -s tclsh9.0 /out/usr/local/bin/tclsh
-RUN mkdir /usr/local/lib/tcl9/site-tcl
-RUN mkdir /out/usr/local/lib/tcl9/site-tcl
-ARG SITETCL=/usr/local/lib/tcl9/site-tcl
+RUN ln -s tclsh$TCLVER /usr/local/bin/tclsh
+#RUN ln -s tclsh$TCLVER /out/usr/local/bin/tclsh
+RUN mkdir -p $SITETCL
+#RUN mkdir /out/$SITETCL
 
-# tclconfig: tip of main
-WORKDIR /src/tclconfig
-RUN wget -q https://core.tcl-lang.org/tclconfig/tarball/6e82b0097c/tclconfig.tar.gz -O - | tar xz --strip-components=1
-
-# thread: tip of main
 WORKDIR /src/thread
-RUN wget -q https://core.tcl-lang.org/thread/tarball/thread-3-0-4/thread.tar.gz -O - | tar xz --strip-components=1
-RUN ln -s ../tclconfig
 RUN autoconf
-RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-symbols
+RUN ./configure CFLAGS="${CFLAGS_ARCH} -g" LDFLAGS="${LDFLAGS_ARCH}"
 RUN make -j
 RUN make install-binaries install-libraries clean
-RUN make DESTDIR=/out install-binaries install-libraries clean
-# tcl9.0 >>>
-# tcl8.7 <<<
-FROM tcl-build-base-common AS tcl-build-base-tcl8.7
-
-# tcl: tip of core-8-branch, now claimed to be defunct
-WORKDIR /src/tcl
-RUN wget -q https://core.tcl-lang.org/tcl/tarball/62ad42bba8/tcl.tar.gz -O - | tar xz --strip-components=1
-WORKDIR /src/tcl/unix
-RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-64bit --enable-symbols
-RUN make -j all CFLAGS="${CFLAGS_ARCH} -fprofile-generate=prof"
-RUN make test CFLAGS="${CFLAGS_ARCH} -fprofile-generate=prof"
-RUN make clean && make -j all CFLAGS="${CFLAGS_ARCH} -fprofile-use=prof -Wno-coverage-mismatch"
-#RUN make -j
-RUN make install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers
-RUN make DESTDIR=/out install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers
-#RUN cp ../libtommath/tommath.h /usr/local/include/
-RUN ln -s /usr/local/bin/tclsh8.7 /usr/local/bin/tclsh
-RUN ln -s tclsh8.7 /out/usr/local/bin/tclsh
-RUN mkdir /usr/local/lib/tcl8/site-tcl
-RUN mkdir /out/usr/local/lib/tcl8/site-tcl
-ARG SITETCL=/usr/local/lib/tcl8/site-tcl
-
-# tclconfig: tip of main
-WORKDIR /src/tclconfig
-RUN wget -q https://core.tcl-lang.org/tclconfig/tarball/6e82b0097c/tclconfig.tar.gz -O - | tar xz --strip-components=1
-
-## thread: tip of thread3-for-tcl8
-WORKDIR /src/thread
-RUN wget -q https://core.tcl-lang.org/thread/tarball/thread-20250902124430-586530a607.tar.gz -O - | tar xz --strip-components=1
-RUN ln -s ../tclconfig
-RUN autoconf
-RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-symbols
-RUN make -j
-RUN make install-binaries install-libraries clean
-RUN make DESTDIR=/out install-binaries install-libraries clean
-# tcl8.7 >>>
-
-FROM tcl-build-base-tcl${TCLVER} AS tcl-build-base
+#RUN make DESTDIR=/out install-binaries install-libraries clean
 # tcl-build-base >>>
+# tcl-build-out (additional stage to install to /out) <<<
+FROM tcl-build-base AS tcl-build-out
+WORKDIR /src/tcl/unix
+RUN make DESTDIR=/out install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers
+RUN ln -s tclsh$TCLVER /out/usr/local/bin/tclsh
+WORKDIR /src/thread
+RUN make DESTDIR=/out install-binaries install-libraries clean
+# tcl-build-out >>>
 
 # package-jitc <<<
 FROM tcl-build-base AS package-jitc
@@ -640,17 +640,16 @@ FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
 RUN git clone -b v3.0.0b28 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
-RUN make all && \
-	mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
-    cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
+RUN make all
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp -a tm/* /out/usr/local/lib/tcl9/site-tcl
 # package-pgwire >>>
 # package-dedup <<<
 FROM tcl-build-base AS package-dedup
 WORKDIR /src/dedup
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.7 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
-RUN autoconf && ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-symbols && \
-    make DESTDIR=/out install-binaries install-libraries clean && \
-    cp /out/usr/local/lib/dedup*/dedupConfig.sh /out/usr/local/lib/
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.8 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
+RUN meson setup builddir/ --buildtype release
+RUN meson install -C builddir/ --destdir /out
 # package-dedup >>>
 # package-reuri <<<
 FROM tcl-build-base AS package-reuri
@@ -665,7 +664,7 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rl_http <<<
 FROM tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.20 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.21 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN make DESTDIR=/out install
 # package-rl_http >>>
 # libbrotli <<<
@@ -687,19 +686,19 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-rltest <<<
 FROM tcl-build-base AS package-rltest
 WORKDIR /src/rltest
-RUN git clone -b v1.5.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rltest .
+RUN git clone -b v1.5.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rltest .
 RUN make DESTDIR=/out install-tm
 # pacakge-rltest >>>
 # package-names <<<
 FROM tcl-build-base AS package-names
 WORKDIR /src/names
-RUN git clone -b v0.1.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/names .
+RUN git clone -b v0.1.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/names .
 RUN make test && make DESTDIR=/out install-tm
 # package-names >>>
 # package-prng <<<
 FROM tcl-build-base AS package-prng
 WORKDIR /src/prng
-RUN git clone -b v0.7.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/prng .
+RUN git clone -b v0.7.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/prng .
 RUN make test && make DESTDIR=/out install-tm
 # package-prng >>>
 # package-sqlite3 <<<
@@ -788,9 +787,10 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --
 # package-parse_args <<<
 FROM tcl-build-base AS package-parse_args
 WORKDIR /src/parse_args
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.5.1 --single-branch --depth 1 https://github.com/RubyLane/parse_args .
-RUN autoconf && ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-symbols && \
-    make DESTDIR=/out install-binaries install-libraries clean
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.5.2 --single-branch --depth 1 https://github.com/RubyLane/parse_args .
+RUN autoconf
+RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-symbols
+RUN make DESTDIR=/out install-binaries install-libraries clean
 # package-parse_args >>>
 # package-rl_json <<<
 FROM tcl-build-base AS package-rl_json
@@ -866,15 +866,15 @@ RUN make DESTDIR=/out install-binaries install-libraries
 # package-chantricks <<<
 FROM tcl-build-base AS package-chantricks
 WORKDIR /src/chantricks
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.7 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.8 --single-branch --depth 1 https://github.com/cyanogilvie/chantricks .
 RUN make DESTDIR=/out install-tm
 # package-chantricks >>>
 # package-openapi <<<
 FROM tcl-build-base AS package-openapi
 WORKDIR /src/openapi
 RUN git clone --recurse-submodules --shallow-submodules --branch v0.4.12 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-openapi .
-RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
-	cp *.tm /out/usr/local/lib/tcl8/site-tcl
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp *.tm /out/usr/local/lib/tcl8/site-tcl
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp *.tm /out/usr/local/lib/tcl9/site-tcl
 # package-openapi >>>
 # package-resolve <<<
 FROM tcl-build-base AS package-resolve
@@ -886,7 +886,9 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --
 # package-tcllib <<<
 FROM tcl-build-base AS package-tcllib
 WORKDIR /src/tcllib
-RUN git clone -b cyan-1-21-3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcllib .
+#RUN git clone -b cyan-1-21-3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcllib .
+#RUN wget -q https://core.tcl-lang.org/tcllib/uv/tcllib-2.0.tar.gz -O - | tar xz --strip-components=1
+RUN wget -q https://github.com/tcltk/tcllib/archive/refs/tags/tcllib-2-0.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure && make DESTDIR=/out install-libraries install-applications clean
 # package-tcllib >>>
 # package-docker <<<
@@ -897,7 +899,7 @@ COPY --link --from=package-rl_json		/out /
 COPY --link --from=package-parse_args	/out /
 COPY --link --from=package-tcllib		/out /
 WORKDIR /src/docker
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.3 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-docker-client .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.4 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-docker-client .
 RUN make DESTDIR=/out TM_MODE=-ziplet install-tm
 # package-docker >>>
 # package-gc_class <<<
@@ -905,6 +907,7 @@ FROM tcl-build-base AS package-gc_class
 WORKDIR /src/gc_class
 RUN git clone --recurse-submodules --shallow-submodules --branch v1.0 --single-branch --depth 1 https://github.com/RubyLane/gc_class .
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp gc_class*.tm /out/usr/local/lib/tcl8/site-tcl
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp gc_class*.tm /out/usr/local/lib/tcl9/site-tcl
 # package-gc_class >>>
 # package-tbuild <<<
 FROM tcl-build-base AS package-tbuild
@@ -922,58 +925,77 @@ COPY --from=package-tbuild /out /
 FROM tbuild-base AS package-cflib
 WORKDIR /src/cflib
 RUN git clone --recurse-submodules --shallow-submodules --branch 1.16.1 --single-branch --depth 1 https://github.com/cyanogilvie/cflib .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-cflib >>>
 # package-sop <<<
 FROM tbuild-base AS package-sop
+ARG SITETCL
 WORKDIR /src/sop
 RUN git clone --recurse-submodules --shallow-submodules --branch 1.7.2 --single-branch --depth 1 https://github.com/cyanogilvie/sop .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-sop >>>
 # package-netdgram <<<
 FROM tbuild-base AS package-netdgram
 WORKDIR /src/netdgram
 RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.12 --single-branch --depth 1 https://github.com/cyanogilvie/netdgram .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp -a tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-netdgram >>>
 # package-evlog <<<
 FROM tbuild-base AS package-evlog
 WORKDIR /src/evlog
 RUN git clone --recurse-submodules --shallow-submodules --branch v0.3.1 --single-branch --depth 1 https://github.com/cyanogilvie/evlog .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-evlog >>>
 # package-dsl <<<
 FROM tbuild-base AS package-dsl
 WORKDIR /src/dsl
 RUN git clone --recurse-submodules --shallow-submodules --branch v0.5 --single-branch --depth 1 https://github.com/cyanogilvie/dsl .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-dsl >>>
 # package-logging <<<
 FROM tbuild-base AS package-logging
 WORKDIR /src/logging
 RUN git clone --recurse-submodules --shallow-submodules --branch v0.3 --single-branch --depth 1 https://github.com/cyanogilvie/logging .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-logging >>>
 # package-crypto <<<
 FROM tbuild-base AS package-crypto
 WORKDIR /src/crypto
 RUN git clone --recurse-submodules --shallow-submodules --branch 0.6 --single-branch --depth 1 https://github.com/cyanogilvie/crypto .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-crypto >>>
 # package-datasource <<<
 FROM tbuild-base AS package-datasource
 WORKDIR /src/datasource
 RUN git clone --recurse-submodules --shallow-submodules --branch v0.2.4 --single-branch --depth 1 https://github.com/cyanogilvie/datasource .
-RUN tbuild-lite && mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN tbuild-lite
+RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
+RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
 # package-datasource >>>
 # package-m2 <<<
 FROM tbuild-base AS package-m2
 WORKDIR /src/m2
 #RUN git clone --recurse-submodules --shallow-submodules --branch v0.43.15 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
-RUN git clone --branch v0.43.15 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
+RUN git clone --branch v0.43.16 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
+	mkdir -p /out/usr/local/lib/tcl9/site-tcl && \
 	tbuild-lite build_tm m2 && \
 	cp -r tm/tcl/*			/out/usr/local/lib/tcl8/site-tcl/ && \
+	cp -r tm/tcl/*			/out/usr/local/lib/tcl9/site-tcl/ && \
 	mkdir -p				/out/usr/local/opt/m2 && \
 	cp -r m2_node			/out/usr/local/opt/m2/ && \
 	cp -r tools				/out/usr/local/opt/m2/ && \
@@ -999,10 +1021,9 @@ RUN ln -s ../tclconfig && \
 # package-s2n <<<
 FROM tcl-build-base AS package-s2n
 WORKDIR /src/tcl-s2n
-RUN wget -q https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.5.1/tcl-s2n-0.5.1.tar.gz -O - | tar xz --strip-components=1
+RUN wget -q https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.6.0/tcl-s2n-0.6.0.tar.gz -O - | tar xz --strip-components=1
 RUN ./configure CFLAGS="-O3" --enable-symbols
-#RUN make deps AR_ECHO="echo -e"
-RUN make deps -j
+RUN make deps
 RUN test -e local/lib64/libs2n.a && cp local/lib64/libs2n.a local/lib/ || true
 RUN make DESTDIR=/out install-binaries install-libraries
 # package-s2n >>>
@@ -1017,21 +1038,21 @@ RUN autoconf && ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --
 # package-tty <<<
 FROM tcl-build-base AS package-tty
 WORKDIR /src/tty
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.6.1 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tty .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.7.2 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-tty .
 RUN make DESTDIR=/out install-tm
 # package-tty >>>
 # package-flock <<<
 FROM tcl-build-base AS package-flock
 WORKDIR /src/flock
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.6.1 --single-branch --depth 1 https://github.com/cyanogilvie/flock .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.6.2 --single-branch --depth 1 https://github.com/cyanogilvie/flock .
 RUN make DESTDIR=/out install
 # package-flock >>>
 # package-aio <<<
 FROM tcl-build-base AS package-aio
 WORKDIR /src/aio
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.7.1 --single-branch --depth 1 https://github.com/cyanogilvie/aio .
-RUN make test && \
-	make DESTDIR=/out install-tm
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.8 --single-branch --depth 1 https://github.com/cyanogilvie/aio .
+RUN make test
+RUN make DESTDIR=/out install-tm
 # package-aio >>>
 # package-aws <<<
 FROM tcl-build-base AS package-aws
@@ -1086,9 +1107,129 @@ RUN git clone --recurse-submodules --shallow-submodules --branch v1.2 --single-b
 RUN make DESTDIR=/out install-tm
 # package-ip >>>
 
+# Targets for building a batteries-included runtime in a container and copying to $TCLROOT on the host
+# tcl-copy-debug <<<
+FROM tcl-build-base-common AS tcl-copy-debug
+ARG TCLROOT=/usr/local
+RUN mkdir -p $TCLROOT
+COPY --link --from=tcl-build-src	/src			$TCLROOT/src
+COPY --link --from=base-build-zlib	/out/usr/local 	$TCLROOT
+
+WORKDIR $TCLROOT/src/tcl/unix
+RUN ./configure CFLAGS="-DPURIFY -Og -ggdb3" --prefix=$TCLROOT --enable-symbols
+RUN make -j install
+RUN rm -rf *.o *.zip *.vfs
+RUN ln -s tclsh$TCLVER $TCLROOT/bin/tclsh
+
+WORKDIR $TCLROOT/src/thread
+RUN ./configure CFLAGS="-DPURIFY -Og -ggdb3" --prefix=$TCLROOT --enable-symbols
+RUN make -j install && make clean
+# tcl-copy-debug >>>
+# tcl-copy-optimized <<<
+FROM tcl-build-base-common AS tcl-copy-optimized
+ARG TCLROOT=/usr/local
+
+ARG SITETCL=$TCLROOT/lib/site-tcl
+RUN mkdir -p $TCLROOT
+COPY --link --from=tcl-build-base	/src			$TCLROOT/src
+COPY --link --from=base-build-zlib	/out/usr/local 	$TCLROOT
+
+WORKDIR $TCLROOT/src/tcl/unix
+RUN ./configure CFLAGS="${CFLAGS_ARCH} -g" LDFLAGS="${LDFLAGS_ARCH}" --prefix=$TCLROOT --enable-64bit
+RUN make -j all CFLAGS="${CFLAGS_ARCH} -fprofile-generate=prof -g"
+RUN make test CFLAGS="${CFLAGS_ARCH} -fprofile-generate=prof -g"
+RUN make clean && make -j all CFLAGS="${CFLAGS_ARCH} -fprofile-use=prof -Wno-coverage-mismatch -g"
+RUN make install-binaries install-libraries install-tzdata install-packages install-headers install-private-headers clean
+RUN rm -rf *.o *.zip *.vfs
+RUN ln -s tclsh$TCLVER $TCLROOT/bin/tclsh
+
+WORKDIR $TCLROOT/src/thread
+RUN autoconf
+RUN ./configure CFLAGS="${CFLAGS_ARCH} -g" LDFLAGS="${LDFLAGS_ARCH}" --prefix=$TCLROOT --with-tcl=$TCLROOT/lib
+RUN make clean && make -j && make install-binaries install-libraries clean
+# tcl-copy-optimized >>>
+# tcl-copy <<<
+FROM tcl-copy-$TCLCOPYTARGET AS tcl-copy
+ARG SITETCL=$TCLROOT/lib/site-tcl
+RUN mkdir -p $SITETCL
+
+WORKDIR $TCLROOT
+RUN cat > env.sh << EOF
+export TCLROOT="$TCLROOT"
+export PATH="$TCLROOT/bin:\$PATH"
+export MANPATH="$TCLROOT/share/man:\$MANPATH"
+#export PKG_CONFIG_LIBDIR="$TCLROOT/lib/pkgconfig:\$PKG_CONFIG_LIBDIR"
+export PKG_CONFIG_PATH="$TCLROOT/lib/pkgconfig:\$PKG_CONFIG_PATH"
+EOF
+RUN cat > src/tcl/.vimrc << "EOF"
+set shiftwidth=4
+set ts=8
+set noexpandtab
+EOF
+RUN cp src/tcl/.vimrc src/thread/
+
+COPY --link --from=package-rl_http			/out/usr/local	$TCLROOT
+COPY --link --from=package-dedup			/out/usr/local	$TCLROOT
+#COPY --link --from=package-jitc				/out/usr/local	$TCLROOT
+#COPY --link --from=package-tomcrypt			/out/usr/local	$TCLROOT
+COPY --link --from=package-pgwire			/out/usr/local	$TCLROOT
+#COPY --link --from=package-reuri			/out/usr/local	$TCLROOT
+#COPY --link --from=package-brotli			/out/usr/local	$TCLROOT
+COPY --link --from=package-rltest			/out/usr/local	$TCLROOT
+COPY --link --from=package-names			/out/usr/local	$TCLROOT
+COPY --link --from=package-prng				/out/usr/local	$TCLROOT
+#COPY --link --from=package-sqlite3			/out/usr/local	$TCLROOT
+
+#COPY --link --from=package-pixel-core		/out/usr/local	$TCLROOT
+#COPY --link --from=package-pixel-jpeg		/out/usr/local	$TCLROOT
+#COPY --link --from=package-pixel-png		/out/usr/local	$TCLROOT
+#COPY --link --from=package-pixel-svg_cairo	/out/usr/local	$TCLROOT
+#COPY --link --from=package-pixel-webp		/out/usr/local	$TCLROOT
+#COPY --link --from=package-pixel-imlib2		/out/usr/local	$TCLROOT
+#COPY --link --from=package-pixel-phash		/out/usr/local	$TCLROOT
+
+#COPY --link --from=package-tdom				/out/usr/local	$TCLROOT
+COPY --link --from=package-parse_args		/out/usr/local	$TCLROOT
+#COPY --link --from=package-rl_json			/out/usr/local	$TCLROOT
+#COPY --link --from=package-hash				/out/usr/local	$TCLROOT
+#COPY --link --from=package-unix_sockets		/out/usr/local	$TCLROOT
+COPY --link --from=package-tclreadline		/out/usr/local	$TCLROOT
+#COPY --link --from=package-tclsignal		/out/usr/local	$TCLROOT
+#COPY --link --from=package-type				/out/usr/local	$TCLROOT
+#COPY --link --from=package-inotify			/out/usr/local	$TCLROOT
+#COPY --link --from=package-parsetcl			/out/usr/local	$TCLROOT
+#COPY --link --from=package-ck				/out/usr/local	$TCLROOT
+#COPY --link --from=package-resolve			/out/usr/local	$TCLROOT
+COPY --link --from=package-tcllib			/out/usr/local	$TCLROOT
+#COPY --link --from=package-tdbc				/out/usr/local	$TCLROOT
+#COPY --link --from=package-s2n				/out/usr/local	$TCLROOT
+#COPY --link --from=package-sockopt			/out/usr/local	$TCLROOT
+COPY --link --from=package-chantricks		/out/usr/local	$TCLROOT
+COPY --link --from=package-openapi			/out/usr/local	$TCLROOT
+#COPY --link --from=package-docker			/out/usr/local	$TCLROOT
+COPY --link --from=package-gc_class			/out/usr/local	$TCLROOT
+COPY --link --from=package-tbuild			/out/usr/local	$TCLROOT
+COPY --link --from=package-cflib			/out/usr/local	$TCLROOT
+COPY --link --from=package-sop				/out/usr/local	$TCLROOT
+COPY --link --from=package-netdgram			/out/usr/local	$TCLROOT
+COPY --link --from=package-evlog			/out/usr/local	$TCLROOT
+COPY --link --from=package-dsl				/out/usr/local	$TCLROOT
+COPY --link --from=package-logging			/out/usr/local	$TCLROOT
+COPY --link --from=package-crypto			/out/usr/local	$TCLROOT
+COPY --link --from=package-datasource		/out/usr/local	$TCLROOT
+COPY --link --from=package-m2				/out/usr/local	$TCLROOT
+COPY --link --from=package-tty				/out/usr/local	$TCLROOT
+COPY --link --from=package-flock			/out/usr/local	$TCLROOT
+COPY --link --from=package-aio				/out/usr/local	$TCLROOT
+#COPY --link --from=package-aws				/out/usr/local	$TCLROOT
+COPY --link --from=aklomp-base64			/out/usr/local	$TCLROOT
+#COPY --link --from=package-ip				/out/usr/local	$TCLROOT
+# tcl-copy >>>
+
+
 #FROM tcl-build-base AS tcl-build
 FROM src AS tcl-build
-COPY --link --from=tcl-build-base			/out /
+COPY --link --from=tcl-build-out			/out /
 COPY --link --from=package-rl_http			/out /
 COPY --link --from=package-dedup			/out /
 COPY --link --from=package-jitc				/out /
@@ -1163,7 +1304,7 @@ COPY common_sighandler-*.tm /usr/local/lib/tcl8/site-tcl/
 # tcl-gdb <<<
 FROM tcl-build AS tcl-gdb
 RUN dnf install -q -y gdb vim
-COPY --link --from=tcl-build-base		/src /src
+COPY --link --from=tcl-build-out		/src /src
 COPY --link --from=package-rl_http		/src /src
 COPY --link --from=package-dedup		/src /src
 COPY --link --from=package-jitc			/src /src
