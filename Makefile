@@ -79,7 +79,7 @@ copy_build:
 		--build-arg		"TCLVER=$(TCLVER)" \
 		--build-arg		"TCLROOT=$(DESTDIR)" \
 		.
-	docker run --rm -it --platform linux/amd64 \
+	docker run --rm --platform linux/amd64 \
 		-v "$(DESTDIR)":/out \
 		copy_build_$(TCLCOPYTARGET) \
 		bash -c "cp -a ${DESTDIR}/* /out/"
