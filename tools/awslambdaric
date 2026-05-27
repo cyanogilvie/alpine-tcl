@@ -148,12 +148,12 @@ try {
 	# Handle errors
 	#  If an error occurs, call the initialization error API (https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html#runtimes-api-initerror) and exit immediately
 	puts stderr "Failed to load function: $errmsg\n[dict get $options -errorinfo]"
-	rl_http instvar h POST $api_url/runtime/init/error -data [json template {
+	rl_http instvar h POST $api_url/runtime/init/error -data [encoding convertto utf-8 [json template {
 		{
 			"errorMessage": "Failed to load function.",
 			"errorType":	"InvalidFunctionException"
 		}
-	}]
+	}]]
 	exit 1
 }
 
@@ -226,7 +226,7 @@ while {$running} {
 
 		# Handle the response
 		# Call the invocation response API (https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html#runtimes-api-response) to post the response from the handler.
-		rl_http instvar h POST $api_url/runtime/invocation/$req_id/response -data $response
+		rl_http instvar h POST $api_url/runtime/invocation/$req_id/response -data [encoding convertto utf-8 $response]
 		switch -- [$h code] {
 			202 { # Accepted
 			}
@@ -260,12 +260,12 @@ while {$running} {
 				"errorcode":	"~S:errorcode"
 			}
 		}]
-		rl_http instvar h POST $api_url/runtime/invocation/$req_id/error -data [json template {
+		rl_http instvar h POST $api_url/runtime/invocation/$req_id/error -data [encoding convertto utf-8 [json template {
 			{
 				"errorMessage": "Internal error processing the invocation",
 				"errorType":	"InvalidEventDataException"
 			}
-		}]
+		}]]
 	} finally {
 		# Cleanup
 		# Release unused resources, send data to other services, or perform additional tasks before getting the next event.
