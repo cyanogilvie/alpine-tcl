@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cftcl — batteries-included Tcl runtime</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --text: #e8ebf0;
+    --muted: #9aa3b2;
+    --accent: #7dd3fc;
+    --accent-2: #f0abfc;
+    --border: #262c38;
+    --code-bg: #0b0d11;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fbfbfd;
+      --panel: #ffffff;
+      --text: #1a1d24;
+      --muted: #5b6371;
+      --accent: #0369a1;
+      --accent-2: #9333ea;
+      --border: #e3e6ec;
+      --code-bg: #f3f4f7;
+    }
+  }
+  html, body { background: var(--bg); color: var(--text); margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 6rem;
+  }
+  h1 { font-size: 2.4rem; margin: 0 0 .25rem; letter-spacing: -0.02em; }
+  h1 .accent { color: var(--accent); }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 .75rem; }
+  p { margin: 0.5rem 0 1rem; }
+  .tagline { color: var(--muted); font-size: 1.05rem; margin-bottom: 2rem; }
+  ol { padding-left: 1.25rem; }
+  ol li { margin: 0.9rem 0; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.93em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+  }
+  code.inline {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05em 0.35em;
+  }
+  .sub { color: var(--muted); font-size: 0.9rem; }
+  a { color: var(--accent); }
+  a:hover { color: var(--accent-2); }
+  .pkg-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: .5rem 0 1.5rem;
+    font-size: 0.93rem;
+  }
+  .pkg-table th, .pkg-table td {
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0.6rem;
+    vertical-align: top;
+  }
+  .pkg-table th { color: var(--muted); font-weight: 600; }
+  .pkg-table code { background: transparent; border: 0; padding: 0; }
+  footer {
+    color: var(--muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 4rem;
+    padding-top: 1.25rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="accent">cftcl</span></h1>
+  <p class="tagline">A batteries-included Tcl 9 runtime with <code class="inline">rl_json</code>, <code class="inline">tomcrypt</code>, <code class="inline">aws</code>, <code class="inline">parsetcl</code> and friends — packaged for direct <code class="inline">apk add</code> install on Alpine.</p>
+
+  <h2>Install on Alpine</h2>
+  <p>Run as root inside an Alpine 3.23+ container or host (the repo uses the
+  apk-v3 index format, so apk-tools 3 is required — note the <code class="inline">v3</code>
+  prefix on the repositories line):</p>
+  <pre>wget -qO /etc/apk/keys/cftcl.rsa.pub https://cftcl.cyanogilvie.com/alpine/v1/keys/cftcl.rsa.pub
+echo "v3 https://cftcl.cyanogilvie.com/alpine/v1" >> /etc/apk/repositories
+apk update
+apk add cftcl</pre>
+
+  <p>The Tcl runtime installs under <code class="inline">/opt/cftcl</code>; the shell is <code class="inline">/opt/cftcl/bin/tclsh</code>.</p>
+
+  <h2>Quick smoke test</h2>
+  <pre>/opt/cftcl/bin/tclsh &lt;&lt;'EOF'
+package require rl_json
+namespace import ::rl_json::json
+puts [json pretty {{"hello":"world"}}]
+EOF</pre>
+
+  <h2>Sub-packages</h2>
+  <p>The base <code class="inline">cftcl</code> package gives you a working Tcl interpreter with most batteries already loaded. The split-off sub-packages are optional:</p>
+  <table class="pkg-table">
+    <tr><th>Package</th><th>Contents</th></tr>
+    <tr><td><code>cftcl</code></td><td>Main runtime — Tcl 9, rl_json, tomcrypt, aws, parsetcl, tcllib, etc.</td></tr>
+    <tr><td><code>cftcl-dev</code></td><td>Build headers, stubs library, pkg-config files. Install to compile C extensions against this Tcl.</td></tr>
+    <tr><td><code>cftcl-doc</code></td><td>Man pages and reference docs.</td></tr>
+    <tr><td><code>cftcl-svg</code></td><td>Pixel_svg_cairo (SVG rendering via cairo). Pulls in cairo + rsvg.</td></tr>
+    <tr><td><code>cftcl-phash</code></td><td>Pixel_phash perceptual-hash extension.</td></tr>
+    <tr><td><code>cftcl-dbg</code></td><td>Detached debug symbols (large; for gdb / valgrind).</td></tr>
+  </table>
+
+  <h2>Architectures</h2>
+  <p>Builds are published per architecture under <code class="inline">/alpine/v1/&lt;arch&gt;/</code>. Currently available:</p>
+  <ul>
+    <li><code class="inline">x86_64</code></li>
+    <li><code class="inline">aarch64</code></li>
+  </ul>
+
+  <h2>Source &amp; issues</h2>
+  <p><a href="https://github.com/cyanogilvie/alpine-tcl">github.com/cyanogilvie/alpine-tcl</a></p>
+
+  <footer>
+    Repo signed with <code>cftcl.rsa</code> (RSA-4096, SHA-256). Repository served from S3 via CloudFront.
+  </footer>
+</main>
+</body>
+</html>

@@ -374,14 +374,13 @@ release_trigger_arm64:
 		--source-version "refs/tags/$(VER)" \
 		--query 'build.id' --output text
 
-# Sync the static landing page to the release bucket. Currently sources
-# from bld/sam/pkgrepo/site/ — move when the old pkgrepo tree is retired.
-release_site_upload:
+# Sync the static landing page to the release bucket.
+release_site_upload: site/index.html
 	@bucket=$(call release_cfn_output,$(RELEASE_STACK),BucketName); \
 	test -n "$$bucket" || { echo "release stack not deployed"; exit 1; }; \
 	dist=$(call release_cfn_output,$(RELEASE_STACK),DistributionId); \
 	aws s3 sync --region $(RELEASE_REGION) \
-		bld/sam/pkgrepo/site/ "s3://$$bucket/" \
+		site/ "s3://$$bucket/" \
 		--exclude 'alpine/*' --exclude 'deb/*' --exclude 'rpm/*' --exclude 'zip/*' \
 		--cache-control "public, max-age=300" \
 		--delete; \
