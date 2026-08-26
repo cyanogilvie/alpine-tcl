@@ -53,6 +53,12 @@
       "AllowedValues": ["PriceClass_100", "PriceClass_200", "PriceClass_All"],
       "Description": "CloudFront price class. PriceClass_100 = NA + EU only."
     },
+    "BuildComputeType": {
+      "Type": "String",
+      "Default": "BUILD_GENERAL1_2XLARGE",
+      "AllowedValues": ["BUILD_GENERAL1_SMALL", "BUILD_GENERAL1_MEDIUM", "BUILD_GENERAL1_LARGE", "BUILD_GENERAL1_XLARGE", "BUILD_GENERAL1_2XLARGE"],
+      "Description": "Compute type for both CodeBuild projects. Note the account service quota for the chosen size must be > 0 (new accounts start with 0 for XLarge/2XLarge)."
+    },
     "EnableWebhooks": {
       "Type": "String",
       "Default": "false",
@@ -343,7 +349,7 @@
         "ConcurrentBuildLimit": 1,
         "Environment": {
           "Type": "LINUX_CONTAINER",
-          "ComputeType": "BUILD_GENERAL1_2XLARGE",
+          "ComputeType": {"Ref": "BuildComputeType"},
           "Image": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoX86}:${BuilderImageTag}"},
           "ImagePullCredentialsType": "SERVICE_ROLE",
           "PrivilegedMode": true,
@@ -396,7 +402,7 @@
         "ConcurrentBuildLimit": 1,
         "Environment": {
           "Type": "ARM_CONTAINER",
-          "ComputeType": "BUILD_GENERAL1_2XLARGE",
+          "ComputeType": {"Ref": "BuildComputeType"},
           "Image": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoArm64}:${BuilderImageTag}"},
           "ImagePullCredentialsType": "SERVICE_ROLE",
           "PrivilegedMode": true,

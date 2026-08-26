@@ -35,7 +35,7 @@ phases:
   pre_build:
     commands:
       - set -eu
-      - export AWS_ACCOUNT_ID=$(echo "$CODEBUILD_BUILD_ARN" | cut -d: -f5)
+      - 'export AWS_ACCOUNT_ID=$(echo "$CODEBUILD_BUILD_ARN" | cut -d: -f5)'
       - export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
       # Derive VER from whichever trigger context is set:
       #   webhook tag push  → CODEBUILD_WEBHOOK_TRIGGER=tag/<name>

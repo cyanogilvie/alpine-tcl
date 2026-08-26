@@ -312,7 +312,8 @@ release_deploy: template.json
 			$(if $(GH_OWNER),GitHubOwner=$(GH_OWNER)) \
 			$(if $(GH_REPO),GitHubRepo=$(GH_REPO)) \
 			$(if $(TAG_PATTERN),TagPattern=$(TAG_PATTERN)) \
-			$(if $(ENABLE_WEBHOOKS),EnableWebhooks=$(ENABLE_WEBHOOKS))
+			$(if $(ENABLE_WEBHOOKS),EnableWebhooks=$(ENABLE_WEBHOOKS)) \
+			$(if $(COMPUTE_TYPE),BuildComputeType=$(COMPUTE_TYPE))
 
 # Build the Alpine-based CodeBuild env image, push one per-arch tag.
 # CodeBuild references <repo>:$(RELEASE_BUILDER_IMAGE_TAG).
