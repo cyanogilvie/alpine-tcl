@@ -1,0 +1,480 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "cftcl-release — single stack hosting the cftcl package repo and the two CodeBuild projects (x86_64 + aarch64) that build and publish .apks on tag push.",
+
+  "Parameters": {
+    "DomainName": {
+      "Type": "String",
+      "Description": "Custom hostname for the CloudFront distribution (e.g. cftcl.example.com)."
+    },
+    "HostedZoneId": {
+      "Type": "AWS::Route53::HostedZone::Id",
+      "Description": "Route53 hosted zone in which to create the A/AAAA alias records."
+    },
+    "AcmCertificateArn": {
+      "Type": "String",
+      "Description": "ACM certificate ARN in us-east-1 covering DomainName."
+    },
+    "SigningSecretArn": {
+      "Type": "String",
+      "Description": "SecretsManager ARN of the signing keypair JSON ({name, private_key, public_key}). The CodeBuild execution role gets GetSecretValue on this ARN."
+    },
+    "SigningKeyName": {
+      "Type": "String",
+      "Default": "cftcl.rsa",
+      "Description": "Filename to use for the signing key inside abuild and as the published pubkey name."
+    },
+    "ApkRepoBranch": {
+      "Type": "String",
+      "Default": "v1",
+      "Description": "Repo branch prefix under alpine/. Bump when making backward-incompatible repo layout changes."
+    },
+    "GitHubOwner": {
+      "Type": "String",
+      "Description": "GitHub owner/org for the source repo (used for the CodeBuild source URL)."
+    },
+    "GitHubRepo": {
+      "Type": "String",
+      "Description": "GitHub repository name for the source repo."
+    },
+    "TagPattern": {
+      "Type": "String",
+      "Default": "^refs/tags/v.+",
+      "Description": "Regex applied to HEAD_REF on push events. Only matching refs trigger a build."
+    },
+    "BuilderImageTag": {
+      "Type": "String",
+      "Default": "latest",
+      "Description": "Image tag to pull from the per-arch builder ECR repos. The release_builder_images Makefile target pushes :latest."
+    },
+    "PriceClass": {
+      "Type": "String",
+      "Default": "PriceClass_100",
+      "AllowedValues": ["PriceClass_100", "PriceClass_200", "PriceClass_All"],
+      "Description": "CloudFront price class. PriceClass_100 = NA + EU only."
+    },
+    "EnableWebhooks": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Create the tag-push webhooks on the CodeBuild projects. Must be false on first deploy: the GitHub connection starts PENDING and CreateWebhook rejects it until the OAuth handshake is done (make release_authorize_github). Redeploy with true afterwards."
+    }
+  },
+
+  "Conditions": {
+    "WebhooksEnabled": {"Fn::Equals": [{"Ref": "EnableWebhooks"}, "true"]}
+  },
+
+  "Resources": {
+
+    "RepoBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [{"ObjectOwnership": "BucketOwnerEnforced"}]
+        }
+      }
+    },
+
+    "RepoBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "RepoBucket"},
+        "PolicyDocument": {
+          "Statement": [{
+            "Sid": "AllowCloudFrontOAC",
+            "Effect": "Allow",
+            "Principal": {"Service": "cloudfront.amazonaws.com"},
+            "Action": "s3:GetObject",
+            "Resource": {"Fn::Sub": "${RepoBucket.Arn}/*"},
+            "Condition": {
+              "StringEquals": {
+                "AWS:SourceArn": {"Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"}
+              }
+            }
+          }]
+        }
+      }
+    },
+
+    "OriginAccessControl": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": {"Fn::Sub": "${AWS::StackName}-oac"},
+          "OriginAccessControlOriginType": "s3",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4"
+        }
+      }
+    },
+
+    "Distribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "HttpVersion": "http2and3",
+          "IPV6Enabled": true,
+          "PriceClass": {"Ref": "PriceClass"},
+          "Aliases": [{"Ref": "DomainName"}],
+          "DefaultRootObject": "index.html",
+          "ViewerCertificate": {
+            "AcmCertificateArn": {"Ref": "AcmCertificateArn"},
+            "MinimumProtocolVersion": "TLSv1.2_2021",
+            "SslSupportMethod": "sni-only"
+          },
+          "Origins": [{
+            "Id": "S3Origin",
+            "DomainName": {"Fn::GetAtt": ["RepoBucket", "RegionalDomainName"]},
+            "S3OriginConfig": {"OriginAccessIdentity": ""},
+            "OriginAccessControlId": {"Fn::GetAtt": ["OriginAccessControl", "Id"]}
+          }],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "S3Origin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": ["GET", "HEAD"],
+            "Compress": true,
+            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+          },
+          "CacheBehaviors": [
+            {
+              "PathPattern": "*/APKINDEX.tar.gz",
+              "TargetOriginId": "S3Origin",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "AllowedMethods": ["GET", "HEAD"],
+              "Compress": true,
+              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+            },
+            {
+              "PathPattern": "*/Packages.adb",
+              "TargetOriginId": "S3Origin",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "AllowedMethods": ["GET", "HEAD"],
+              "Compress": true,
+              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+            }
+          ]
+        }
+      }
+    },
+
+    "DnsRecordA": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {"Ref": "HostedZoneId"},
+        "Name": {"Ref": "DomainName"},
+        "Type": "A",
+        "AliasTarget": {
+          "DNSName": {"Fn::GetAtt": ["Distribution", "DomainName"]},
+          "HostedZoneId": "Z2FDTNDATAQYW2"
+        }
+      }
+    },
+
+    "DnsRecordAAAA": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {"Ref": "HostedZoneId"},
+        "Name": {"Ref": "DomainName"},
+        "Type": "AAAA",
+        "AliasTarget": {
+          "DNSName": {"Fn::GetAtt": ["Distribution", "DomainName"]},
+          "HostedZoneId": "Z2FDTNDATAQYW2"
+        }
+      }
+    },
+
+    "BuilderRepoX86": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {"Fn::Sub": "${AWS::StackName}-builder-x86_64"},
+        "ImageTagMutability": "MUTABLE",
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+        }
+      }
+    },
+
+    "BuilderRepoArm64": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {"Fn::Sub": "${AWS::StackName}-builder-arm64"},
+        "ImageTagMutability": "MUTABLE",
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+        }
+      }
+    },
+
+    "BuildCacheRepo": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {"Fn::Sub": "${AWS::StackName}-build-cache"},
+        "ImageTagMutability": "MUTABLE",
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Expire untagged cache layers after 14 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":14},\"action\":{\"type\":\"expire\"}}]}"
+        }
+      }
+    },
+
+    "GitHubConnection": {
+      "Type": "AWS::CodeConnections::Connection",
+      "Properties": {
+        "ConnectionName": {"Fn::Sub": "${AWS::StackName}-github"},
+        "ProviderType": "GitHub"
+      }
+    },
+
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "codebuild.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+          }]
+        },
+        "Policies": [{
+          "PolicyName": "BuildPermissions",
+          "PolicyDocument": {
+            "Statement": [
+              {
+                "Sid": "Logs",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*"}
+              },
+              {
+                "Sid": "ECRAuthAll",
+                "Effect": "Allow",
+                "Action": "ecr:GetAuthorizationToken",
+                "Resource": "*"
+              },
+              {
+                "Sid": "ECRReadWriteCacheAndBuilders",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchCheckLayerAvailability",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchGetImage",
+                  "ecr:InitiateLayerUpload",
+                  "ecr:UploadLayerPart",
+                  "ecr:CompleteLayerUpload",
+                  "ecr:PutImage"
+                ],
+                "Resource": [
+                  {"Fn::GetAtt": ["BuilderRepoX86", "Arn"]},
+                  {"Fn::GetAtt": ["BuilderRepoArm64", "Arn"]},
+                  {"Fn::GetAtt": ["BuildCacheRepo", "Arn"]}
+                ]
+              },
+              {
+                "Sid": "S3RepoBucketObjects",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:PutObject",
+                  "s3:PutObjectAcl",
+                  "s3:GetObject",
+                  "s3:DeleteObject"
+                ],
+                "Resource": {"Fn::Sub": "${RepoBucket.Arn}/*"}
+              },
+              {
+                "Sid": "S3RepoBucketList",
+                "Effect": "Allow",
+                "Action": ["s3:ListBucket"],
+                "Resource": {"Fn::GetAtt": ["RepoBucket", "Arn"]}
+              },
+              {
+                "Sid": "SecretsManagerSigningKey",
+                "Effect": "Allow",
+                "Action": "secretsmanager:GetSecretValue",
+                "Resource": {"Ref": "SigningSecretArn"}
+              },
+              {
+                "Sid": "CloudFrontInvalidate",
+                "Effect": "Allow",
+                "Action": "cloudfront:CreateInvalidation",
+                "Resource": {"Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"}
+              },
+              {
+                "Sid": "UseConnection",
+                "Effect": "Allow",
+                "Action": [
+                  "codeconnections:GetConnectionToken",
+                  "codeconnections:GetConnection",
+                  "codeconnections:UseConnection"
+                ],
+                "Resource": {"Ref": "GitHubConnection"}
+              }
+            ]
+          }
+        }]
+      }
+    },
+
+    "BuildX86": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-build-x86_64"},
+        "ServiceRole": {"Fn::GetAtt": ["BuildRole", "Arn"]},
+        "Artifacts": {"Type": "NO_ARTIFACTS"},
+        "Cache": {"Type": "NO_CACHE"},
+        "TimeoutInMinutes": 60,
+        "ConcurrentBuildLimit": 1,
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_2XLARGE",
+          "Image": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoX86}:${BuilderImageTag}"},
+          "ImagePullCredentialsType": "SERVICE_ROLE",
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {"Name": "APK_ARCH",           "Value": "x86_64"},
+            {"Name": "REPO_BUCKET",        "Value": {"Ref": "RepoBucket"}},
+            {"Name": "CF_DIST_ID",         "Value": {"Ref": "Distribution"}},
+            {"Name": "CACHE_REPO_URI",     "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuildCacheRepo}"}},
+            {"Name": "SIGNING_SECRET_ARN", "Value": {"Ref": "SigningSecretArn"}},
+            {"Name": "SIGNING_KEY_NAME",   "Value": {"Ref": "SigningKeyName"}},
+            {"Name": "APK_BRANCH",         "Value": {"Ref": "ApkRepoBranch"}}
+          ]
+        },
+        "Source": {
+          "Type": "GITHUB",
+          "Location": {"Fn::Sub": "https://github.com/${GitHubOwner}/${GitHubRepo}"},
+          "GitCloneDepth": 1,
+          "BuildSpec": "buildspec.yml",
+          "Auth": {
+            "Type": "CODECONNECTIONS",
+            "Resource": {"Ref": "GitHubConnection"}
+          }
+        },
+        "Triggers": {
+          "Fn::If": ["WebhooksEnabled", {
+            "Webhook": true,
+            "FilterGroups": [[
+              {"Type": "EVENT",    "Pattern": "PUSH"},
+              {"Type": "HEAD_REF", "Pattern": {"Ref": "TagPattern"}}
+            ]]
+          }, {"Ref": "AWS::NoValue"}]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {"Fn::Sub": "/aws/codebuild/${AWS::StackName}-build-x86_64"}
+          }
+        }
+      }
+    },
+
+    "BuildArm64": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-build-arm64"},
+        "ServiceRole": {"Fn::GetAtt": ["BuildRole", "Arn"]},
+        "Artifacts": {"Type": "NO_ARTIFACTS"},
+        "Cache": {"Type": "NO_CACHE"},
+        "TimeoutInMinutes": 60,
+        "ConcurrentBuildLimit": 1,
+        "Environment": {
+          "Type": "ARM_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_2XLARGE",
+          "Image": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoArm64}:${BuilderImageTag}"},
+          "ImagePullCredentialsType": "SERVICE_ROLE",
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {"Name": "APK_ARCH",           "Value": "aarch64"},
+            {"Name": "REPO_BUCKET",        "Value": {"Ref": "RepoBucket"}},
+            {"Name": "CF_DIST_ID",         "Value": {"Ref": "Distribution"}},
+            {"Name": "CACHE_REPO_URI",     "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuildCacheRepo}"}},
+            {"Name": "SIGNING_SECRET_ARN", "Value": {"Ref": "SigningSecretArn"}},
+            {"Name": "SIGNING_KEY_NAME",   "Value": {"Ref": "SigningKeyName"}},
+            {"Name": "APK_BRANCH",         "Value": {"Ref": "ApkRepoBranch"}}
+          ]
+        },
+        "Source": {
+          "Type": "GITHUB",
+          "Location": {"Fn::Sub": "https://github.com/${GitHubOwner}/${GitHubRepo}"},
+          "GitCloneDepth": 1,
+          "BuildSpec": "buildspec.yml",
+          "Auth": {
+            "Type": "CODECONNECTIONS",
+            "Resource": {"Ref": "GitHubConnection"}
+          }
+        },
+        "Triggers": {
+          "Fn::If": ["WebhooksEnabled", {
+            "Webhook": true,
+            "FilterGroups": [[
+              {"Type": "EVENT",    "Pattern": "PUSH"},
+              {"Type": "HEAD_REF", "Pattern": {"Ref": "TagPattern"}}
+            ]]
+          }, {"Ref": "AWS::NoValue"}]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {"Fn::Sub": "/aws/codebuild/${AWS::StackName}-build-arm64"}
+          }
+        }
+      }
+    }
+  },
+
+  "Outputs": {
+    "BucketName": {
+      "Description": "S3 bucket hosting the package repo content.",
+      "Value": {"Ref": "RepoBucket"}
+    },
+    "DistributionId": {
+      "Description": "CloudFront distribution ID (used for cache invalidations).",
+      "Value": {"Ref": "Distribution"}
+    },
+    "DistributionDomain": {
+      "Description": "Internal CloudFront domain name (use DomainName for the public URL).",
+      "Value": {"Fn::GetAtt": ["Distribution", "DomainName"]}
+    },
+    "BuildX86Name": {
+      "Description": "CodeBuild project name for x86_64 builds (use with aws codebuild start-build).",
+      "Value": {"Ref": "BuildX86"}
+    },
+    "BuildArm64Name": {
+      "Description": "CodeBuild project name for aarch64 builds.",
+      "Value": {"Ref": "BuildArm64"}
+    },
+    "BuilderRepoX86Uri": {
+      "Description": "ECR URI for the x86_64 Alpine builder image. Push with the release_builder_images Makefile target.",
+      "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoX86}"}
+    },
+    "BuilderRepoArm64Uri": {
+      "Description": "ECR URI for the aarch64 Alpine builder image.",
+      "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoArm64}"}
+    },
+    "CacheRepoUri": {
+      "Description": "ECR URI for the buildx layer cache.",
+      "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuildCacheRepo}"}
+    },
+    "GitHubConnectionArn": {
+      "Description": "CodeConnections ARN — authorize once at https://<region>.console.aws.amazon.com/codesuite/settings/connections/redirect?connectionArn=<this>.",
+      "Value": {"Ref": "GitHubConnection"}
+    }
+  }
+}

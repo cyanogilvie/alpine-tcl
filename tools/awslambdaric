@@ -1,12 +1,12 @@
-#!/usr/local/bin/tclsh8.7
+#!/usr/local/bin/tclsh
 
 set handler_path	[file normalize [pwd]]
 
 package require rl_http
 package require rl_json
 package require parse_args
-interp alias {} json {} ::rl_json::json
-interp alias {} parse_args {} ::parse_args::parse_args
+namespace import ::rl_json::json
+namespace import ::parse_args::parse_args
 
 set running			true
 set hooks			{}

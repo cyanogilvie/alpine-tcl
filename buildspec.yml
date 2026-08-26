@@ -1,0 +1,107 @@
+# cftcl-release per-arch buildspec.
+#
+# Both CodeBuild projects (build-x86_64 + build-arm64) run this same file;
+# they differ only in environment image (Alpine x86 vs aarch64), compute
+# type (LINUX_CONTAINER vs ARM_CONTAINER), and the APK_ARCH env var.
+#
+# Inputs (from project env):
+#   APK_ARCH          x86_64 | aarch64
+#   REPO_BUCKET       S3 bucket holding the package repo
+#   CF_DIST_ID        CloudFront distribution to invalidate
+#   CACHE_REPO_URI    ECR repo for buildx registry cache
+#   SIGNING_SECRET_ARN, SIGNING_KEY_NAME
+#
+# Derived:
+#   VER               from refs/tags/<tag> via CODEBUILD_WEBHOOK_TRIGGER
+#   TCLROOT           /opt/${PKGNAME}
+#
+# Credentials: the builder image carries the aws-ecr-credential-helper +
+# /root/.docker/config.json {credsStore: ecr-login}, so docker buildx push/pull
+# against ECR uses the execution role with no explicit `docker login`.
+# The inner `docker run` uses --network host + IMDS-style env passthrough so
+# build_apk.tcl (running inside the cftcl-apk-prep image) can call
+# SecretsManager:GetSecretValue with the same execution role.
+
+version: 0.2
+
+env:
+  variables:
+    PKGREL: "0"
+    PKGNAME: "cftcl"
+    DIST: "alpine"
+    TCLVER: "9.0"
+
+phases:
+  pre_build:
+    commands:
+      - set -eu
+      - export AWS_ACCOUNT_ID=$(echo "$CODEBUILD_BUILD_ARN" | cut -d: -f5)
+      - export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+      # Derive VER from whichever trigger context is set:
+      #   webhook tag push  → CODEBUILD_WEBHOOK_TRIGGER=tag/<name>
+      #   manual start-build → CODEBUILD_SOURCE_VERSION=refs/tags/<name>
+      - |
+        if [ -n "${CODEBUILD_WEBHOOK_TRIGGER:-}" ]; then
+          VER="${CODEBUILD_WEBHOOK_TRIGGER#tag/}"
+        elif [ -n "${CODEBUILD_SOURCE_VERSION:-}" ]; then
+          VER="${CODEBUILD_SOURCE_VERSION#refs/tags/}"
+        else
+          echo "no tag trigger context — set CODEBUILD_SOURCE_VERSION=refs/tags/<v>"
+          exit 1
+        fi
+        export VER
+      #- export TCLROOT="/opt/${PKGNAME}-${DIST}-${APK_ARCH}"
+      - export TCLROOT="/opt/${PKGNAME}"
+      - echo "Building ${PKGNAME} ${VER} for ${APK_ARCH} (TCLROOT=${TCLROOT})"
+      # docker-container driver is required for cache-to=registry,mode=max.
+      - docker buildx create --use --driver docker-container --name cftcl-builder
+
+  build:
+    commands:
+      # 1. Build the package-apk-prep image with registry-backed buildx cache.
+      - |
+        docker buildx build \
+          --target      package-apk-prep \
+          --build-arg   TCLCOPYTARGET=optimized \
+          --build-arg   DIST="$DIST" \
+          --build-arg   TCLVER="$TCLVER" \
+          --build-arg   TCLROOT="$TCLROOT" \
+          --cache-from  type=registry,ref=${CACHE_REPO_URI}:musl-${APK_ARCH} \
+          --cache-to    type=registry,ref=${CACHE_REPO_URI}:musl-${APK_ARCH},mode=max \
+          --load \
+          -t cftcl-apk-prep:local \
+          .
+
+      # 2. Run build_apk.tcl inside the prep image.
+      # --network host: the inner container needs IMDS reachability so
+      #   build_apk.tcl can call SecretsManager via the execution role.
+      # AWS_CONTAINER_* env vars: pass through both old and new IMDS env shapes
+      #   so the inner SDK finds them whichever the CodeBuild runtime sets.
+      - mkdir -p out
+      - |
+        docker run --rm \
+          --network host \
+          -e SIGNING_SECRET_ID="$SIGNING_SECRET_ARN" \
+          -e SIGNING_KEY_NAME \
+          -e VER \
+          -e PKGREL \
+          -e PKGNAME \
+          -e TCLROOT \
+          -e REPO_BUCKET \
+          -e AWS_REGION="$AWS_DEFAULT_REGION" \
+          -e AWS_DEFAULT_REGION \
+          -e AWS_CONTAINER_CREDENTIALS_FULL_URI \
+          -e AWS_CONTAINER_CREDENTIALS_RELATIVE_URI \
+          -e AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE \
+          -v "$(pwd)/out:/host-out" \
+          -e APK_OUT=/host-out \
+          cftcl-apk-prep:local \
+          /bootstrap/bin/tclsh /var/task/build_apk.tcl
+
+# post_build:
+#   commands:
+#     - |
+#       aws cloudfront create-invalidation \
+#         --distribution-id "$CF_DIST_ID" \
+#         --paths "/alpine/v1/${APK_ARCH}/*" "/alpine/v1/keys/*" \
+#         --query 'Invalidation.Id' --output text

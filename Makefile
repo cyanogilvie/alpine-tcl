@@ -142,9 +142,8 @@ lambda_builder:
 PKGREPO_BOOTSTRAP_STACK ?= alpine-tcl-pkgrepo-bootstrap
 PKGREPO_STACK           ?= alpine-tcl-pkgrepo
 PKGREPO_REGION          ?= us-east-1
-SIGNING_KEY_NAME        ?= alpine-tcl.rsa
-APK_BRANCH              ?= v1
-PKGNAME                 ?= alpine-tcl
+SIGNING_KEY_NAME        ?= cftcl.rsa
+PKGNAME                 ?= cftcl
 PKGREL                  ?= 0
 # Alpine spells arm as aarch64; LAMBDAARCH is AWS-style (arm64). Translate.
 APK_ARCH                ?= $(if $(filter arm64,$(LAMBDAARCH)),aarch64,$(LAMBDAARCH))
@@ -190,7 +189,7 @@ pkgrepo_deploy:
 			IndexLambdaImageUri="$$image" \
 			IndexLambdaArchitecture=$(LAMBDAARCH) \
 			SigningKeyName=$(SIGNING_KEY_NAME) \
-			ApkRepoBranch=$(APK_BRANCH) \
+			ApkRepoBranch=v1 \
 			$(if $(DOMAIN),DomainName=$(DOMAIN)) \
 			$(if $(HOSTED_ZONE_ID),HostedZoneId=$(HOSTED_ZONE_ID))
 
@@ -217,40 +216,164 @@ pkgrepo_init_signing_key:
 		>/dev/null; \
 	echo "seeded $$secret with a fresh RSA-4096 keypair as $(SIGNING_KEY_NAME)"
 
-pkgrepo_apk: Dockerfile bld/sam/pkgrepo/build_apk.sh
+pkgrepo_apk: Dockerfile tools/build_apk.tcl
 	@test -d "$(HOME)/.aws" || { echo "no $(HOME)/.aws — aws cli credentials must be configured locally"; exit 1; }
-	@signing_secret=$(call cfn_output,$(PKGREPO_STACK),SigningSecretArn); \
-	test -n "$$signing_secret" || { echo "main stack not deployed — run 'make pkgrepo_deploy' first"; exit 1; }; \
-	mkdir -p bld/pkgrepo-out; \
 	docker buildx build --load --provenance=false \
+		$(BUILDER) \
+		--build-arg		"TCLCOPYTARGET=$(TCLCOPYTARGET)" \
+		--build-arg		"DIST=alpine" \
+		--build-arg		"TCLVER=$(TCLVER)" \
+		--build-arg		"TCLROOT=$(DESTDIR)" \
 		--target package-apk-prep \
 		--platform linux/$(DOCKERARCH) \
 		-t pkgrepo-apk-prep:$(VER)-$(LAMBDAARCH) \
-		. && \
-	docker run --rm \
+		. \
+	&& docker run --rm \
 		-v "$(HOME)/.aws:/root/.aws:ro" \
 		-v "$(CURDIR)/bld/pkgrepo-out:/host-out" \
-		-e SIGNING_SECRET_ID="$$signing_secret" \
-		-e SIGNING_KEY_NAME="$(SIGNING_KEY_NAME)" \
+		-e PKGREPO_STACK="$(PKGREPO_STACK)" \
 		-e VER="$(VER)" \
 		-e PKGREL="$(PKGREL)" \
 		-e PKGNAME="$(PKGNAME)" \
 		-e AWS_REGION="$(PKGREPO_REGION)" \
+		-e TCLROOT="$(DESTDIR)" \
+		-e REPO_BUCKET="$(call cfn_output,$(PKGREPO_STACK),BucketName)" \
 		$(if $(AWS_PROFILE),-e AWS_PROFILE="$(AWS_PROFILE)") \
 		--platform linux/$(DOCKERARCH) \
-		--entrypoint bash \
+		--entrypoint /bootstrap/bin/tclsh \
 		pkgrepo-apk-prep:$(VER)-$(LAMBDAARCH) \
-		-c '/var/task/build_apk.sh && cp /out/*.apk /host-out/'
+		/var/task/build_apk.tcl
 
-pkgrepo_apk_upload: pkgrepo_apk
-	@bucket=$(call cfn_output,$(PKGREPO_STACK),BucketName); \
-	test -n "$$bucket" || { echo "main stack not deployed"; exit 1; }; \
-	for f in bld/pkgrepo-out/*.apk; do \
-		echo "uploading $$f -> s3://$$bucket/apk/$(APK_BRANCH)/$(APK_ARCH)/" ; \
-		aws s3 cp --region $(PKGREPO_REGION) "$$f" \
-			"s3://$$bucket/apk/$(APK_BRANCH)/$(APK_ARCH)/" \
-			--content-type application/octet-stream ; \
-	done
+#pkgrepo_apk_upload: pkgrepo_apk
+#	@bucket=$(call cfn_output,$(PKGREPO_STACK),BucketName); \
+#	test -n "$$bucket" || { echo "main stack not deployed"; exit 1; }; \
+#	dist=$(call cfn_output,$(PKGREPO_STACK),DistributionId); \
+#	for f in bld/pkgrepo-out/*.apk; do \
+#		echo "uploading $$f -> s3://$$bucket/alpine/v1/$(APK_ARCH)/" ; \
+#		aws s3 cp --region $(PKGREPO_REGION) "$$f" \
+#			"s3://$$bucket/alpine/v1/$(APK_ARCH)/" \
+#			--content-type application/octet-stream ; \
+#	done; \
+#	if [ -n "$$dist" ]; then \
+#		echo "invalidating CloudFront cache for /alpine/v1/$(APK_ARCH)/*"; \
+#		aws cloudfront create-invalidation --distribution-id "$$dist" \
+#			--paths "/alpine/v1/$(APK_ARCH)/*" \
+#			--query 'Invalidation.Id' --output text; \
+#	fi
+
+# ---- cftcl-release stack ---------------------------------------------------
+# Single stack at the project root (template.json) — supersedes the
+# alpine-tcl-pkgrepo stack. CodeBuild does the per-arch build + sign +
+# upload + APKINDEX regen + CF invalidate; tag-push webhook drives it.
+
+RELEASE_STACK              ?= cftcl-release
+RELEASE_REGION             ?= us-east-1
+RELEASE_BUILDER_IMAGE_TAG  ?= latest
+
+# release_cfn_output mirrors cfn_output but targets RELEASE_REGION.
+# Usage: $(call release_cfn_output,<stack>,<output-key>)
+release_cfn_output = $$(aws cloudformation describe-stacks --region $(RELEASE_REGION) \
+	--stack-name $(1) \
+	--query "Stacks[0].Outputs[?OutputKey=='$(2)'].OutputValue" \
+	--output text)
+
+# Required on first deploy:
+#   DOMAIN HOSTED_ZONE_ID CERT_ARN SIGNING_SECRET_ARN GH_OWNER GH_REPO
+# Optional (template defaults used otherwise):
+#   SIGNING_KEY_NAME TAG_PATTERN RELEASE_BUILDER_IMAGE_TAG ENABLE_WEBHOOKS
+# Subsequent deploys reuse previous parameter values.
+# ENABLE_WEBHOOKS must stay unset/false until the GitHub connection is
+# authorized (make release_authorize_github), then redeploy with
+# ENABLE_WEBHOOKS=true to create the tag-push webhooks.
+release_deploy: template.json
+	@stack_exists=0; \
+	aws cloudformation describe-stacks --region $(RELEASE_REGION) --stack-name $(RELEASE_STACK) >/dev/null 2>&1 && stack_exists=1; \
+	if [ $$stack_exists -eq 0 ]; then \
+		missing=; \
+		for v in DOMAIN HOSTED_ZONE_ID CERT_ARN SIGNING_SECRET_ARN GH_OWNER GH_REPO; do \
+			eval "val=\$$$$v"; \
+			[ -z "$$val" ] && missing="$$missing $$v"; \
+		done; \
+		if [ -n "$$missing" ]; then echo "first deploy requires:$$missing"; exit 1; fi; \
+	fi; \
+	sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+		--stack-name $(RELEASE_STACK) \
+		--region $(RELEASE_REGION) \
+		--template-file template.json \
+		--capabilities CAPABILITY_IAM \
+		--parameter-overrides \
+			SigningKeyName=$(SIGNING_KEY_NAME) \
+			ApkRepoBranch=v1 \
+			BuilderImageTag=$(RELEASE_BUILDER_IMAGE_TAG) \
+			$(if $(DOMAIN),DomainName=$(DOMAIN)) \
+			$(if $(HOSTED_ZONE_ID),HostedZoneId=$(HOSTED_ZONE_ID)) \
+			$(if $(CERT_ARN),AcmCertificateArn=$(CERT_ARN)) \
+			$(if $(SIGNING_SECRET_ARN),SigningSecretArn=$(SIGNING_SECRET_ARN)) \
+			$(if $(GH_OWNER),GitHubOwner=$(GH_OWNER)) \
+			$(if $(GH_REPO),GitHubRepo=$(GH_REPO)) \
+			$(if $(TAG_PATTERN),TagPattern=$(TAG_PATTERN)) \
+			$(if $(ENABLE_WEBHOOKS),EnableWebhooks=$(ENABLE_WEBHOOKS))
+
+# Build the Alpine-based CodeBuild env image, push one per-arch tag.
+# CodeBuild references <repo>:$(RELEASE_BUILDER_IMAGE_TAG).
+release_builder_images: builder/Dockerfile
+	@x86_uri=$(call release_cfn_output,$(RELEASE_STACK),BuilderRepoX86Uri); \
+	arm_uri=$(call release_cfn_output,$(RELEASE_STACK),BuilderRepoArm64Uri); \
+	test -n "$$x86_uri" || { echo "release stack not deployed — run 'make release_deploy' first"; exit 1; }; \
+	registry=$${x86_uri%%/*}; \
+	echo "logging into $$registry"; \
+	aws ecr get-login-password --region $(RELEASE_REGION) \
+		| docker login --username AWS --password-stdin "$$registry"; \
+	echo "building + pushing $$x86_uri:$(RELEASE_BUILDER_IMAGE_TAG)"; \
+	docker buildx build --platform linux/amd64 --push \
+		-t "$$x86_uri:$(RELEASE_BUILDER_IMAGE_TAG)" builder; \
+	echo "building + pushing $$arm_uri:$(RELEASE_BUILDER_IMAGE_TAG)"; \
+	docker buildx build --platform linux/arm64 --push \
+		-t "$$arm_uri:$(RELEASE_BUILDER_IMAGE_TAG)" builder
+
+# CodeConnections::Connection deploys in PENDING state; the OAuth handshake
+# can only happen interactively. Print the console URL to click once.
+release_authorize_github:
+	@arn=$(call release_cfn_output,$(RELEASE_STACK),GitHubConnectionArn); \
+	test -n "$$arn" || { echo "release stack not deployed"; exit 1; }; \
+	echo "Open this URL in a browser and complete the GitHub OAuth handshake:"; \
+	echo "  https://$(RELEASE_REGION).console.aws.amazon.com/codesuite/settings/connections/redirect?connectionArn=$$arn"
+
+# Manual trigger (e.g. retry a release without re-pushing the tag).
+# Reads VER from the Makefile to set the source-version.
+release_trigger_x86:
+	@name=$(call release_cfn_output,$(RELEASE_STACK),BuildX86Name); \
+	test -n "$$name" || { echo "release stack not deployed"; exit 1; }; \
+	echo "starting build for $$name @ refs/tags/$(VER)"; \
+	aws codebuild start-build --region $(RELEASE_REGION) \
+		--project-name "$$name" \
+		--source-version "refs/tags/$(VER)" \
+		--query 'build.id' --output text
+
+release_trigger_arm64:
+	@name=$(call release_cfn_output,$(RELEASE_STACK),BuildArm64Name); \
+	test -n "$$name" || { echo "release stack not deployed"; exit 1; }; \
+	echo "starting build for $$name @ refs/tags/$(VER)"; \
+	aws codebuild start-build --region $(RELEASE_REGION) \
+		--project-name "$$name" \
+		--source-version "refs/tags/$(VER)" \
+		--query 'build.id' --output text
+
+# Sync the static landing page to the release bucket. Currently sources
+# from bld/sam/pkgrepo/site/ — move when the old pkgrepo tree is retired.
+release_site_upload:
+	@bucket=$(call release_cfn_output,$(RELEASE_STACK),BucketName); \
+	test -n "$$bucket" || { echo "release stack not deployed"; exit 1; }; \
+	dist=$(call release_cfn_output,$(RELEASE_STACK),DistributionId); \
+	aws s3 sync --region $(RELEASE_REGION) \
+		bld/sam/pkgrepo/site/ "s3://$$bucket/" \
+		--exclude 'alpine/*' --exclude 'deb/*' --exclude 'rpm/*' --exclude 'zip/*' \
+		--cache-control "public, max-age=300" \
+		--delete; \
+	if [ -n "$$dist" ]; then \
+		aws cloudfront create-invalidation --distribution-id "$$dist" \
+			--paths '/index.html' '/' --query 'Invalidation.Id' --output text; \
+	fi
 
 clean:
 	-rm -r aws-lambda-rie-arm64 aws-lamda-rie-x86_64
@@ -258,4 +381,6 @@ clean:
 .PHONY: alpine-tcl alpine-tcl-gdb m2 package_report upload gdb clean \
 	lambdatest-arm64 lambdatest-amd64 copy_build \
 	pkgrepo_bootstrap pkgrepo_index_lambda pkgrepo_deploy \
-	pkgrepo_init_signing_key pkgrepo_apk pkgrepo_apk_upload
+	pkgrepo_init_signing_key pkgrepo_apk pkgrepo_apk_upload \
+	release_deploy release_builder_images release_authorize_github \
+	release_trigger_x86 release_trigger_arm64 release_site_upload
