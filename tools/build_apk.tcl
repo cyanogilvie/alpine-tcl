@@ -525,5 +525,15 @@ if 0 {
 		-cache_control	"public, max-age=60"
 }
 
+# Publish the signing public key so consumers can drop it into
+# /etc/apk/keys. The filename must match the key name the packages and
+# index were signed with.
+aws s3 put_object \
+	-bucket			[repo_bucket] \
+	-key			alpine/v1/keys/cftcl.rsa.pub \
+	-body			[chantricks readfile $work/.abuild/cftcl.rsa.pub] \
+	-content_type	text/plain \
+	-cache_control	"public, max-age=300"
+
 
 # vim: foldmethod=marker foldmarker=<<<,>>> ts=4 sw=4 noexpandtab
