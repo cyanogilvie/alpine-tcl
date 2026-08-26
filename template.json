@@ -42,11 +42,6 @@
       "Default": "^refs/tags/v.+",
       "Description": "Regex applied to HEAD_REF on push events. Only matching refs trigger a build."
     },
-    "BuilderImageTag": {
-      "Type": "String",
-      "Default": "latest",
-      "Description": "Image tag to pull from the per-arch builder ECR repos. The release_builder_images Makefile target pushes :latest."
-    },
     "PriceClass": {
       "Type": "String",
       "Default": "PriceClass_100",
@@ -204,28 +199,6 @@
       }
     },
 
-    "BuilderRepoX86": {
-      "Type": "AWS::ECR::Repository",
-      "Properties": {
-        "RepositoryName": {"Fn::Sub": "${AWS::StackName}-builder-x86_64"},
-        "ImageTagMutability": "MUTABLE",
-        "LifecyclePolicy": {
-          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
-        }
-      }
-    },
-
-    "BuilderRepoArm64": {
-      "Type": "AWS::ECR::Repository",
-      "Properties": {
-        "RepositoryName": {"Fn::Sub": "${AWS::StackName}-builder-arm64"},
-        "ImageTagMutability": "MUTABLE",
-        "LifecyclePolicy": {
-          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
-        }
-      }
-    },
-
     "BuildCacheRepo": {
       "Type": "AWS::ECR::Repository",
       "Properties": {
@@ -288,8 +261,6 @@
                   "ecr:PutImage"
                 ],
                 "Resource": [
-                  {"Fn::GetAtt": ["BuilderRepoX86", "Arn"]},
-                  {"Fn::GetAtt": ["BuilderRepoArm64", "Arn"]},
                   {"Fn::GetAtt": ["BuildCacheRepo", "Arn"]}
                 ]
               },
@@ -350,8 +321,8 @@
         "Environment": {
           "Type": "LINUX_CONTAINER",
           "ComputeType": {"Ref": "BuildComputeType"},
-          "Image": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoX86}:${BuilderImageTag}"},
-          "ImagePullCredentialsType": "SERVICE_ROLE",
+          "Image": "aws/codebuild/amazonlinux-x86_64-standard:5.0",
+          "ImagePullCredentialsType": "CODEBUILD",
           "PrivilegedMode": true,
           "EnvironmentVariables": [
             {"Name": "APK_ARCH",           "Value": "x86_64"},
@@ -403,8 +374,8 @@
         "Environment": {
           "Type": "ARM_CONTAINER",
           "ComputeType": {"Ref": "BuildComputeType"},
-          "Image": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoArm64}:${BuilderImageTag}"},
-          "ImagePullCredentialsType": "SERVICE_ROLE",
+          "Image": "aws/codebuild/amazonlinux-aarch64-standard:3.0",
+          "ImagePullCredentialsType": "CODEBUILD",
           "PrivilegedMode": true,
           "EnvironmentVariables": [
             {"Name": "APK_ARCH",           "Value": "aarch64"},
@@ -465,14 +436,6 @@
     "BuildArm64Name": {
       "Description": "CodeBuild project name for aarch64 builds.",
       "Value": {"Ref": "BuildArm64"}
-    },
-    "BuilderRepoX86Uri": {
-      "Description": "ECR URI for the x86_64 Alpine builder image. Push with the release_builder_images Makefile target.",
-      "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoX86}"}
-    },
-    "BuilderRepoArm64Uri": {
-      "Description": "ECR URI for the aarch64 Alpine builder image.",
-      "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuilderRepoArm64}"}
     },
     "CacheRepoUri": {
       "Description": "ECR URI for the buildx layer cache.",

@@ -15,9 +15,8 @@
 #   VER               from refs/tags/<tag> via CODEBUILD_WEBHOOK_TRIGGER
 #   TCLROOT           /opt/${PKGNAME}
 #
-# Credentials: the builder image carries the aws-ecr-credential-helper +
-# /root/.docker/config.json {credsStore: ecr-login}, so docker buildx push/pull
-# against ECR uses the execution role with no explicit `docker login`.
+# Credentials: an explicit `docker login` against ECR (pre_build) with a
+# token from the execution role covers the buildx cache push/pull.
 # The inner `docker run` uses --network host + IMDS-style env passthrough so
 # build_apk.tcl (running inside the cftcl-apk-prep image) can call
 # SecretsManager:GetSecretValue with the same execution role.
@@ -53,6 +52,9 @@ phases:
       #- export TCLROOT="/opt/${PKGNAME}-${DIST}-${APK_ARCH}"
       - export TCLROOT="/opt/${PKGNAME}"
       - echo "Building ${PKGNAME} ${VER} for ${APK_ARCH} (TCLROOT=${TCLROOT})"
+      # The managed image auto-starts dockerd (PrivilegedMode), but has no
+      # baked-in ECR credential helper - log in for the buildx cache pushes.
+      - aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR_REGISTRY"
       # docker-container driver is required for cache-to=registry,mode=max.
       - docker buildx create --use --driver docker-container --name cftcl-builder
 

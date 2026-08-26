@@ -348,8 +348,10 @@ FROM base-build AS base-build-freetype
 #RUN wget -q https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.gz -O - | tar xz --strip-components=1
 # savannah broken at the moment:
 #RUN wget -q https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-3.tar.gz -O - | tar xz --strip-components=1
-ADD --unpack https://downloads.sourceforge.net/freetype/freetype-2.14.3.tar.xz /src
-WORKDIR /src/freetype-2.14.3
+# sourceforge serves an HTML mirror-picker page to BuildKit's HTTP fetcher
+# (user-agent sniffing), so ADD --unpack can't be used for sourceforge URLs.
+WORKDIR /src/freetype
+RUN wget -q https://downloads.sourceforge.net/freetype/freetype-2.14.3.tar.xz -O - | tar xJ --strip-components=1
 RUN ./configure --disable-shared
 RUN make -j
 RUN make install DESTDIR=/out
@@ -401,8 +403,9 @@ RUN make install DESTDIR=/out
 # zlib >>>
 # libpng <<<
 FROM base-build AS base-build-libpng
-ADD --unpack https://download.sourceforge.net/libpng/libpng-1.6.58.tar.gz /src
-WORKDIR /src/libpng-1.6.58
+# sourceforge blocks BuildKit's fetcher (see freetype above) — keep wget here
+WORKDIR /src/libpng
+RUN wget -q https://download.sourceforge.net/libpng/libpng-1.6.58.tar.gz -O - | tar xz --strip-components=1
 COPY --link --from=base-build-zlib /out /
 RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --disable-shared --enable-pic --disable-tests --disable-tools --enable-hardware-optimizations
 RUN make -j
@@ -743,8 +746,9 @@ RUN meson install -C build/ --destdir /out
 # rsvg >>>
 # imlib2 <<<
 FROM base-build AS base-build-imlib2
-ADD --unpack https://downloads.sourceforge.net/enlightenment/imlib2-1.12.6.tar.gz /src
-WORKDIR /src/imlib2-1.12.6
+# sourceforge blocks BuildKit's fetcher (see freetype above) — keep wget here
+WORKDIR /src/imlib2
+RUN wget -q https://downloads.sourceforge.net/enlightenment/imlib2-1.12.6.tar.gz -O - | tar xz --strip-components=1
 COPY --link --from=base-build-freetype			/out /
 COPY --link --from=base-build-jpeg-turbo		/out /
 COPY --link --from=base-build-libexif			/out /

@@ -104,6 +104,18 @@ lambda_builder:
 		--output type=image,push=true,oci-mediatypes=false \
 		.
 
+TEST_TARGET=tcl-build-base
+test_target:
+	docker buildx build $(BUILDER) $(PLATFORM) -t test_target --load \
+		--target		$(TEST_TARGET) \
+		--build-arg		"DIST=$(DIST)" \
+		--build-arg		"TCLCOPYTARGET=$(TCLCOPYTARGET)" \
+		--build-arg		"TARGETARCH=$(DOCKERARCH)" \
+		--provenance=false \
+		--output type=image,oci-mediatypes=false \
+		.
+	docker run --rm -it --entrypoint /bin/sh test_target
+
 # ------------------------------------------------------------------------
 # pkgrepo: package-hosting stack and tooling. Two CFN stacks:
 #
@@ -261,6 +273,27 @@ pkgrepo_apk: Dockerfile tools/build_apk.tcl
 #			--query 'Invalidation.Id' --output text; \
 #	fi
 
+# Sync the static landing-page content to the bucket root. CloudFront's
+# DefaultRootObject is index.html, so visiting https://<domain>/ serves
+# bld/sam/pkgrepo/site/index.html. Files inside subdirs (currently just
+# index.html, but extendable to per-distro pages, css, images, etc) get
+# uploaded with the right Content-Type. We exclude the alpine/ prefix
+# from the sync so a stray local file can't clobber the APK objects.
+pkgrepo_site_upload:
+	@bucket=$(call cfn_output,$(PKGREPO_STACK),BucketName); \
+	test -n "$$bucket" || { echo "main stack not deployed"; exit 1; }; \
+	dist=$(call cfn_output,$(PKGREPO_STACK),DistributionId); \
+	aws s3 sync --region $(PKGREPO_REGION) \
+		bld/sam/pkgrepo/site/ "s3://$$bucket/" \
+		--exclude 'alpine/*' --exclude 'deb/*' --exclude 'rpm/*' --exclude 'zip/*' \
+		--cache-control "public, max-age=300" \
+		--delete; \
+	if [ -n "$$dist" ]; then \
+		echo "invalidating CloudFront cache for /*"; \
+		aws cloudfront create-invalidation --distribution-id "$$dist" \
+			--paths '/index.html' '/' --query 'Invalidation.Id' --output text; \
+	fi
+
 # ---- cftcl-release stack ---------------------------------------------------
 # Single stack at the project root (template.json) — supersedes the
 # alpine-tcl-pkgrepo stack. CodeBuild does the per-arch build + sign +
@@ -268,7 +301,6 @@ pkgrepo_apk: Dockerfile tools/build_apk.tcl
 
 RELEASE_STACK              ?= cftcl-release
 RELEASE_REGION             ?= us-east-1
-RELEASE_BUILDER_IMAGE_TAG  ?= latest
 
 # release_cfn_output mirrors cfn_output but targets RELEASE_REGION.
 # Usage: $(call release_cfn_output,<stack>,<output-key>)
@@ -280,7 +312,7 @@ release_cfn_output = $$(aws cloudformation describe-stacks --region $(RELEASE_RE
 # Required on first deploy:
 #   DOMAIN HOSTED_ZONE_ID CERT_ARN SIGNING_SECRET_ARN GH_OWNER GH_REPO
 # Optional (template defaults used otherwise):
-#   SIGNING_KEY_NAME TAG_PATTERN RELEASE_BUILDER_IMAGE_TAG ENABLE_WEBHOOKS
+#   SIGNING_KEY_NAME TAG_PATTERN ENABLE_WEBHOOKS COMPUTE_TYPE
 # Subsequent deploys reuse previous parameter values.
 # ENABLE_WEBHOOKS must stay unset/false until the GitHub connection is
 # authorized (make release_authorize_github), then redeploy with
@@ -304,7 +336,6 @@ release_deploy: template.json
 		--parameter-overrides \
 			SigningKeyName=$(SIGNING_KEY_NAME) \
 			ApkRepoBranch=v1 \
-			BuilderImageTag=$(RELEASE_BUILDER_IMAGE_TAG) \
 			$(if $(DOMAIN),DomainName=$(DOMAIN)) \
 			$(if $(HOSTED_ZONE_ID),HostedZoneId=$(HOSTED_ZONE_ID)) \
 			$(if $(CERT_ARN),AcmCertificateArn=$(CERT_ARN)) \
@@ -314,23 +345,6 @@ release_deploy: template.json
 			$(if $(TAG_PATTERN),TagPattern=$(TAG_PATTERN)) \
 			$(if $(ENABLE_WEBHOOKS),EnableWebhooks=$(ENABLE_WEBHOOKS)) \
 			$(if $(COMPUTE_TYPE),BuildComputeType=$(COMPUTE_TYPE))
-
-# Build the Alpine-based CodeBuild env image, push one per-arch tag.
-# CodeBuild references <repo>:$(RELEASE_BUILDER_IMAGE_TAG).
-release_builder_images: builder/Dockerfile
-	@x86_uri=$(call release_cfn_output,$(RELEASE_STACK),BuilderRepoX86Uri); \
-	arm_uri=$(call release_cfn_output,$(RELEASE_STACK),BuilderRepoArm64Uri); \
-	test -n "$$x86_uri" || { echo "release stack not deployed — run 'make release_deploy' first"; exit 1; }; \
-	registry=$${x86_uri%%/*}; \
-	echo "logging into $$registry"; \
-	aws ecr get-login-password --region $(RELEASE_REGION) \
-		| docker login --username AWS --password-stdin "$$registry"; \
-	echo "building + pushing $$x86_uri:$(RELEASE_BUILDER_IMAGE_TAG)"; \
-	docker buildx build --platform linux/amd64 --push \
-		-t "$$x86_uri:$(RELEASE_BUILDER_IMAGE_TAG)" builder; \
-	echo "building + pushing $$arm_uri:$(RELEASE_BUILDER_IMAGE_TAG)"; \
-	docker buildx build --platform linux/arm64 --push \
-		-t "$$arm_uri:$(RELEASE_BUILDER_IMAGE_TAG)" builder
 
 # CodeConnections::Connection deploys in PENDING state; the OAuth handshake
 # can only happen interactively. Print the console URL to click once.
@@ -383,5 +397,6 @@ clean:
 	lambdatest-arm64 lambdatest-amd64 copy_build \
 	pkgrepo_bootstrap pkgrepo_index_lambda pkgrepo_deploy \
 	pkgrepo_init_signing_key pkgrepo_apk pkgrepo_apk_upload \
-	release_deploy release_builder_images release_authorize_github \
+	pkgrepo_site_upload \
+	release_deploy release_authorize_github \
 	release_trigger_x86 release_trigger_arm64 release_site_upload
