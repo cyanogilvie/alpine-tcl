@@ -199,13 +199,27 @@
       }
     },
 
-    "BuildCacheRepo": {
-      "Type": "AWS::ECR::Repository",
+    "BuildCacheBucket": {
+      "Type": "AWS::S3::Bucket",
       "Properties": {
-        "RepositoryName": {"Fn::Sub": "${AWS::StackName}-build-cache"},
-        "ImageTagMutability": "MUTABLE",
-        "LifecyclePolicy": {
-          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Expire untagged cache layers after 14 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":14},\"action\":{\"type\":\"expire\"}}]}"
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [{
+            "Id": "ExpireStaleCache",
+            "Status": "Enabled",
+            "ExpirationInDays": 30,
+            "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1}
+          }]
         }
       }
     },
@@ -243,26 +257,20 @@
                 "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-*"}
               },
               {
-                "Sid": "ECRAuthAll",
-                "Effect": "Allow",
-                "Action": "ecr:GetAuthorizationToken",
-                "Resource": "*"
-              },
-              {
-                "Sid": "ECRReadWriteCacheAndBuilders",
+                "Sid": "S3BuildCacheObjects",
                 "Effect": "Allow",
                 "Action": [
-                  "ecr:BatchCheckLayerAvailability",
-                  "ecr:GetDownloadUrlForLayer",
-                  "ecr:BatchGetImage",
-                  "ecr:InitiateLayerUpload",
-                  "ecr:UploadLayerPart",
-                  "ecr:CompleteLayerUpload",
-                  "ecr:PutImage"
+                  "s3:PutObject",
+                  "s3:GetObject",
+                  "s3:DeleteObject"
                 ],
-                "Resource": [
-                  {"Fn::GetAtt": ["BuildCacheRepo", "Arn"]}
-                ]
+                "Resource": {"Fn::Sub": "${BuildCacheBucket.Arn}/*"}
+              },
+              {
+                "Sid": "S3BuildCacheList",
+                "Effect": "Allow",
+                "Action": ["s3:ListBucket"],
+                "Resource": {"Fn::GetAtt": ["BuildCacheBucket", "Arn"]}
               },
               {
                 "Sid": "S3RepoBucketObjects",
@@ -328,7 +336,7 @@
             {"Name": "APK_ARCH",           "Value": "x86_64"},
             {"Name": "REPO_BUCKET",        "Value": {"Ref": "RepoBucket"}},
             {"Name": "CF_DIST_ID",         "Value": {"Ref": "Distribution"}},
-            {"Name": "CACHE_REPO_URI",     "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuildCacheRepo}"}},
+            {"Name": "CACHE_BUCKET",       "Value": {"Ref": "BuildCacheBucket"}},
             {"Name": "SIGNING_SECRET_ARN", "Value": {"Ref": "SigningSecretArn"}},
             {"Name": "SIGNING_KEY_NAME",   "Value": {"Ref": "SigningKeyName"}},
             {"Name": "APK_BRANCH",         "Value": {"Ref": "ApkRepoBranch"}}
@@ -381,7 +389,7 @@
             {"Name": "APK_ARCH",           "Value": "aarch64"},
             {"Name": "REPO_BUCKET",        "Value": {"Ref": "RepoBucket"}},
             {"Name": "CF_DIST_ID",         "Value": {"Ref": "Distribution"}},
-            {"Name": "CACHE_REPO_URI",     "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuildCacheRepo}"}},
+            {"Name": "CACHE_BUCKET",       "Value": {"Ref": "BuildCacheBucket"}},
             {"Name": "SIGNING_SECRET_ARN", "Value": {"Ref": "SigningSecretArn"}},
             {"Name": "SIGNING_KEY_NAME",   "Value": {"Ref": "SigningKeyName"}},
             {"Name": "APK_BRANCH",         "Value": {"Ref": "ApkRepoBranch"}}
@@ -437,9 +445,9 @@
       "Description": "CodeBuild project name for aarch64 builds.",
       "Value": {"Ref": "BuildArm64"}
     },
-    "CacheRepoUri": {
-      "Description": "ECR URI for the buildx layer cache.",
-      "Value": {"Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BuildCacheRepo}"}
+    "CacheBucketName": {
+      "Description": "S3 bucket holding the buildx layer cache.",
+      "Value": {"Ref": "BuildCacheBucket"}
     },
     "GitHubConnectionArn": {
       "Description": "CodeConnections ARN — authorize once at https://<region>.console.aws.amazon.com/codesuite/settings/connections/redirect?connectionArn=<this>.",

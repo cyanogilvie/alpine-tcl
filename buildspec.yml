@@ -8,15 +8,19 @@
 #   APK_ARCH          x86_64 | aarch64
 #   REPO_BUCKET       S3 bucket holding the package repo
 #   CF_DIST_ID        CloudFront distribution to invalidate
-#   CACHE_REPO_URI    ECR repo for buildx registry cache
+#   CACHE_BUCKET      S3 bucket for the buildx layer cache (type=s3; the ECR
+#                     registry backend can't hold a mode=max cache manifest
+#                     for a build this deep - it exceeds ECR's layers-per-
+#                     image limit)
 #   SIGNING_SECRET_ARN, SIGNING_KEY_NAME
 #
 # Derived:
 #   VER               from refs/tags/<tag> via CODEBUILD_WEBHOOK_TRIGGER
 #   TCLROOT           /opt/${PKGNAME}
 #
-# Credentials: an explicit `docker login` against ECR (pre_build) with a
-# token from the execution role covers the buildx cache push/pull.
+# Credentials: the buildkitd container (docker-container driver) can't reach
+# CodeBuild's credential endpoint, so the execution role's creds are exported
+# with `aws configure export-credentials` and passed as s3 cache attributes.
 # The inner `docker run` uses --network host + IMDS-style env passthrough so
 # build_apk.tcl (running inside the cftcl-apk-prep image) can call
 # SecretsManager:GetSecretValue with the same execution role.
@@ -34,8 +38,6 @@ phases:
   pre_build:
     commands:
       - set -eu
-      - 'export AWS_ACCOUNT_ID=$(echo "$CODEBUILD_BUILD_ARN" | cut -d: -f5)'
-      - export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
       # Derive VER from whichever trigger context is set:
       #   webhook tag push  → CODEBUILD_WEBHOOK_TRIGGER=tag/<name>
       #   manual start-build → CODEBUILD_SOURCE_VERSION=refs/tags/<name>
@@ -52,15 +54,15 @@ phases:
       #- export TCLROOT="/opt/${PKGNAME}-${DIST}-${APK_ARCH}"
       - export TCLROOT="/opt/${PKGNAME}"
       - echo "Building ${PKGNAME} ${VER} for ${APK_ARCH} (TCLROOT=${TCLROOT})"
-      # The managed image auto-starts dockerd (PrivilegedMode), but has no
-      # baked-in ECR credential helper - log in for the buildx cache pushes.
-      - aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-      # docker-container driver is required for cache-to=registry,mode=max.
+      # Execution-role creds for the s3 cache backend (see header comment).
+      - export $(aws configure export-credentials --format env-no-export)
+      - export CACHE="type=s3,region=${AWS_DEFAULT_REGION},bucket=${CACHE_BUCKET},name=musl-${APK_ARCH},access_key_id=${AWS_ACCESS_KEY_ID},secret_access_key=${AWS_SECRET_ACCESS_KEY},session_token=${AWS_SESSION_TOKEN}"
+      # docker-container driver is required for cache-to mode=max.
       - docker buildx create --use --driver docker-container --name cftcl-builder
 
   build:
     commands:
-      # 1. Build the package-apk-prep image with registry-backed buildx cache.
+      # 1. Build the package-apk-prep image with s3-backed buildx cache.
       - |
         docker buildx build \
           --target      package-apk-prep \
@@ -68,8 +70,8 @@ phases:
           --build-arg   DIST="$DIST" \
           --build-arg   TCLVER="$TCLVER" \
           --build-arg   TCLROOT="$TCLROOT" \
-          --cache-from  type=registry,ref=${CACHE_REPO_URI}:musl-${APK_ARCH} \
-          --cache-to    type=registry,ref=${CACHE_REPO_URI}:musl-${APK_ARCH},mode=max \
+          --cache-from  "${CACHE}" \
+          --cache-to    "${CACHE},mode=max" \
           --load \
           -t cftcl-apk-prep:local \
           .

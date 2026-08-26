@@ -21,7 +21,13 @@
 # Only the secret's *identifier* travels through args.
 #
 # Inputs (env):
-#   PKGREPO_STACK       (required) Name of the CloudFormation stack.
+#   REPO_BUCKET         S3 bucket to publish to, and
+#   SIGNING_SECRET_ID   SecretsManager ARN/name of the signing keypair;
+#                       either supply both directly (CodeBuild passes them
+#                       from the stack's project env), or set
+#   PKGREPO_STACK       Name of a CloudFormation stack to read BucketName /
+#                       SigningSecretArn outputs from instead (local dev
+#                       path; needs cloudformation:DescribeStacks).
 #   VER                 (required) full version, optionally `v`-prefixed.
 #   PKGREL              (default 0).
 #   PKGNAME             (default cftcl).
@@ -44,12 +50,19 @@ set apkarch		[exec apk info --print-arch]
 
 foreach v {
 	VER
-	PKGREPO_STACK
 } {
 	if {![info exists env($v)]} {
 		puts stderr "$v unset"
 		exit 1
 	}
+}
+
+if {
+	!([info exists env(REPO_BUCKET)] && [info exists env(SIGNING_SECRET_ID)]) &&
+	![info exists env(PKGREPO_STACK)]
+} {
+	puts stderr "need REPO_BUCKET + SIGNING_SECRET_ID, or PKGREPO_STACK to discover them from"
+	exit 1
 }
 
 foreach {v def} {
@@ -74,6 +87,20 @@ proc cfn_output key { #<<<
 		}
 	}
 	dict get $_cfn_output_cache $cachekey $key
+}
+
+#>>>
+proc repo_bucket {} { #<<<
+	global env
+	if {[info exists env(REPO_BUCKET)]} {return $env(REPO_BUCKET)}
+	cfn_output BucketName
+}
+
+#>>>
+proc signing_secret_id {} { #<<<
+	global env
+	if {[info exists env(SIGNING_SECRET_ID)]} {return $env(SIGNING_SECRET_ID)}
+	cfn_output SigningSecretArn
 }
 
 #>>>
@@ -349,7 +376,7 @@ package() {
 # from whatever the environment provides (lambda role under bld, mounted
 # ~/.aws under local docker) — never from args we control.
 file mkdir $work/.abuild
-set secret	[json get [aws secretsmanager get_secret_value -secret_id [cfn_output SigningSecretArn]] SecretString]
+set secret	[json get [aws secretsmanager get_secret_value -secret_id [signing_secret_id]] SecretString]
 chantricks writefile $work/.abuild/cftcl.rsa.pub	[json get $secret public_key]
 chantricks with_chan h {open $work/.abuild/cftcl.rsa w 0o600} {
 	puts -nonewline $h [json get $secret private_key]
@@ -456,7 +483,7 @@ cd $work/packages/$apkarch
 foreach fn [glob -types f *.apk] {
 	puts "uploading $fn: [file size $fn]"
 	aws s3 put_object \
-		-bucket			[cfn_output BucketName] \
+		-bucket			[repo_bucket] \
 		-key			alpine/v1/$apkarch/$fn \
 		-body			[chantricks readbin $fn] \
 		-content_type	application/octet-stream
@@ -465,7 +492,7 @@ foreach fn [glob -types f *.apk] {
 if 0 {
 	# Fetch existing index
 	aws s3 get_object \
-		-bucket			[cfn_output BucketName] \
+		-bucket			[repo_bucket] \
 		-key			alpine/v1/$apkarch/APKINDEX.tar.gz \
 		-payload		index
 	chantricks writebin APKINDEX.prev.tar.gz $index
@@ -477,7 +504,7 @@ if 0 {
 		APKINDEX.tar.gz
 
 	aws s3 put_object \
-		-bucket			[cfn_output BucketName] \
+		-bucket			[repo_bucket] \
 		-key			alpine/v1/$apkarch/APKINDEX.tar.gz \
 		-body			[chantricks readbin APKINDEX.tar.gz] \
 		-content_type	application/octet-stream \
@@ -491,7 +518,7 @@ if 0 {
 
 	puts "Uploading index: [file size $ndx]"
 	aws s3 put_object \
-		-bucket			[cfn_output BucketName] \
+		-bucket			[repo_bucket] \
 		-key			alpine/v1/$apkarch/$ndx \
 		-body			[chantricks readbin $ndx] \
 		-content_type	application/octet-stream \
