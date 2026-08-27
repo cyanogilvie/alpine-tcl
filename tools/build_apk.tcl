@@ -466,17 +466,17 @@ subpkg dbg -desc {debug symbols} {
 	}
 }
 
-subpkg svg -desc {Pixel_svg_cairo} {
+subpkg svg -desc {Pixel_svg_cairo} -depends libgcc {
 	amove $prefix/lib/Pixel_svg_cairo-*
 }
 
-subpkg phash -desc {Pixel_phash} {
+subpkg phash -desc {Pixel_phash} -depends libstdc++ {
 	amove $prefix/lib/Pixel_phash-*
 }
 
 # base package:
 cd $pkgdir
-mkpkg -depends musl-dev
+mkpkg -depends {musl-dev musl-obstack}
 
 # Upload the freshly-built .apks
 cd $work/packages/$apkarch
