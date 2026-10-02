@@ -1177,7 +1177,9 @@ COPY --link --from=base-build-expat	/out /
 COPY --link --from=package-tdom		/out /
 WORKDIR /src/parsetcl
 RUN git clone -q -b v0.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/parsetcl .
-RUN meson setup builddir --buildtype=release -Ddebug=true
+# musl has obstack in a separate libobstack (glibc has it in libc), and
+# parsetcl's meson.build doesn't link it
+RUN meson setup builddir --buildtype=release -Ddebug=true $(test -e /usr/lib/libobstack.so && echo -Dc_link_args=-lobstack)
 RUN meson install -C builddir --destdir /out
 # package-parsetcl >>>
 # package-ck <<<

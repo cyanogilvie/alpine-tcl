@@ -476,7 +476,7 @@ subpkg phash -desc {Pixel_phash} -depends libstdc++ {
 
 # base package:
 cd $pkgdir
-mkpkg -depends {musl-dev musl-obstack}
+mkpkg -depends {musl-dev musl-obstack libstdc++}
 
 # Upload the freshly-built .apks
 cd $work/packages/$apkarch
