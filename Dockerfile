@@ -239,7 +239,7 @@ TCL_STUB_LIB_SPEC="-L/bootstrap/lib -ltclstub"
 EOF
 RUN mkdir -p /tmp/bootstrap/aws \
  && cd /tmp/bootstrap/aws \
- && git clone --recurse-submodules --shallow-submodules --branch v2.0a28 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
+ && git clone --recurse-submodules --shallow-submodules --branch v2.0a30 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
  && meson setup build --prefix=/bootstrap -Dtm_mode=ziplet --buildtype=release --strip \
  && meson install -C build \
  && mkdir -p /tmp/bootstrap/tclsignal \
@@ -910,7 +910,7 @@ RUN meson install -C builddir --destdir /out
 # package-pgwire <<<
 FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b29 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b30 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
@@ -1402,7 +1402,7 @@ COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-s2n			/out /
 COPY --link --from=package-chantricks	/out /
 COPY --link --from=package-tomcrypt		/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a28 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a30 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN ldconfig || true
 RUN meson setup builddir --buildtype=release -Ddebug=true -Dtm_mode=brlet
 RUN meson install -C builddir --destdir /out --skip-subprojects

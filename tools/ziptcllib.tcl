@@ -7,8 +7,11 @@ set tail	[file tail $path]
 chantricks with_chan h {file tempfile tmpfn} {
 	try {
 		puts -nonewline $h [string map [list %tail% [list $tail]] {
-			if {[lsearch -exact -stride 2 -index 1 [zipfs mount] [info script]] >= 0} return
-			zipfs mount [info script] %tail%
+			# zipfs mounts are process-wide: another thread may have mounted it
+			# already, but this interp still needs the package ifneeded entries
+			if {![dict exists [zipfs mount] [file join [zipfs root] %tail%]]} {
+				zipfs mount [info script] %tail%
+			}
 			set dir	[file join [zipfs root] %tail%]
 			source [file join $dir pkgIndex.tcl]
 		}]
