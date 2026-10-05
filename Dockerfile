@@ -1114,8 +1114,8 @@ RUN meson install -C builddir --destdir /out
 # package-parse_args >>>
 # package-rl_json <<<
 FROM tcl-build-base AS package-rl_json
-ADD --unpack https://github.com/RubyLane/rl_json/releases/download/v0.17.7/rl_json-v0.17.7.tar.gz /src
-WORKDIR /src/rl_json-v0.17.7
+ADD --unpack https://github.com/RubyLane/rl_json/releases/download/v0.17.8/rl_json-v0.17.8.tar.gz /src
+WORKDIR /src/rl_json-v0.17.8
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-rl_json >>>
