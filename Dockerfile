@@ -895,8 +895,8 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 
 # package-jitc <<<
 FROM tcl-build-base AS package-jitc
-ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.2/jitc-v0.8.2.tar.gz /src
-WORKDIR /src/jitc-v0.8.2
+ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.3/jitc-v0.8.3.tar.gz /src
+WORKDIR /src/jitc-v0.8.3
 RUN CXXFLAGS="" meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out --tags runtime
 # package-jitc >>>
@@ -910,7 +910,7 @@ RUN meson install -C builddir --destdir /out
 # package-pgwire <<<
 FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b33 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b35 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
@@ -919,7 +919,7 @@ RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp -a tm/* /out/usr/local/lib/t
 # package-dedup <<<
 FROM tcl-build-base AS package-dedup
 WORKDIR /src/dedup
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.25 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.26 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-dedup >>>
@@ -1587,6 +1587,8 @@ COPY --link --from=package-aio				/out/usr/local	/out$TCLROOT
 COPY --link --from=package-aws				/out/usr/local	/out$TCLROOT
 COPY --link --from=aklomp-base64			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-ip				/out/usr/local	/out$TCLROOT
+# Signal handling helper used by long-running services (rl's runnsd, say)
+COPY --link common_sighandler-1.0.tm			/out$TCLROOT/lib/tcl9/site-tcl/
 
 COPY tools/compresstcl.tcl /tmp
 RUN LD_LIBRARY_PATH=/out$TCLROOT/lib /out$TCLROOT/bin/tclsh /tmp/compresstcl.tcl /out$TCLROOT

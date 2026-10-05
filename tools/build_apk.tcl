@@ -510,6 +510,31 @@ if 0 {
 		-content_type	application/octet-stream \
 		-cache_control	"public, max-age=60"
 } else {
+	# Index every version published so far, not just this run's, so that
+	# pinned installs (apk add cftcl=0.10.11-r0) keep resolving after later
+	# releases: fetch the earlier .apks (mkndx needs the files) alongside
+	# this run's
+	set have	[glob -nocomplain -types f *.apk]
+	set token	{}
+	while 1 {
+		set resp	[aws s3 list_objects_v2 \
+			-bucket		[repo_bucket] \
+			-prefix		alpine/v1/$apkarch/ \
+			{*}[if {$token ne {}} {list -continuation_token $token}] \
+		]
+		if {[json exists $resp Contents]} {
+			json foreach obj [json extract $resp Contents] {
+				set fn	[file tail [json get $obj Key]]
+				if {![string match *.apk $fn] || $fn in $have} continue
+				puts "fetching earlier $fn"
+				aws s3 get_object -bucket [repo_bucket] -key [json get $obj Key] -payload body
+				chantricks writebin $fn $body
+			}
+		}
+		if {![json get $resp IsTruncated]} break
+		set token	[json get $resp NextContinuationToken]
+	}
+
 	set apks	[glob -types f *.apk]
 	puts "mkndx on:\n\t[join $apks \n\t]"
 	set ndx		Packages.adb
