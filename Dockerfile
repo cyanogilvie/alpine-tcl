@@ -895,8 +895,8 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 
 # package-jitc <<<
 FROM tcl-build-base AS package-jitc
-ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.7.18/jitc-v0.7.18.tar.gz /src
-WORKDIR /src/jitc-v0.7.18
+ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.0/jitc-v0.8.0.tar.gz /src
+WORKDIR /src/jitc-v0.8.0
 RUN CXXFLAGS="" meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out --tags runtime
 # package-jitc >>>
@@ -910,7 +910,7 @@ RUN meson install -C builddir --destdir /out
 # package-pgwire <<<
 FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b31 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b32 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
