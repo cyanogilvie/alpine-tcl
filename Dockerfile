@@ -910,7 +910,7 @@ RUN meson install -C builddir --destdir /out
 # package-pgwire <<<
 FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b32 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b33 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
@@ -919,7 +919,7 @@ RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp -a tm/* /out/usr/local/lib/t
 # package-dedup <<<
 FROM tcl-build-base AS package-dedup
 WORKDIR /src/dedup
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.24 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.25 --single-branch --depth 1 https://github.com/cyanogilvie/dedup .
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-dedup >>>
@@ -1114,8 +1114,8 @@ RUN meson install -C builddir --destdir /out
 # package-parse_args >>>
 # package-rl_json <<<
 FROM tcl-build-base AS package-rl_json
-ADD --unpack https://github.com/RubyLane/rl_json/releases/download/v0.17.6/rl_json-v0.17.6.tar.gz /src
-WORKDIR /src/rl_json-v0.17.6
+ADD --unpack https://github.com/RubyLane/rl_json/releases/download/v0.17.7/rl_json-v0.17.7.tar.gz /src
+WORKDIR /src/rl_json-v0.17.7
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-rl_json >>>
