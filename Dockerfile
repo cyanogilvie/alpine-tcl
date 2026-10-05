@@ -1176,7 +1176,7 @@ FROM tcl-build-base AS package-parsetcl
 COPY --link --from=base-build-expat	/out /
 COPY --link --from=package-tdom		/out /
 WORKDIR /src/parsetcl
-RUN git clone -q -b v0.4 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/parsetcl .
+RUN git clone -q -b v0.4.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/parsetcl .
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-parsetcl >>>
@@ -1326,7 +1326,7 @@ RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/
 FROM tbuild-base AS package-m2
 WORKDIR /src/m2
 #RUN git clone --recurse-submodules --shallow-submodules --branch v0.43.15 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
-RUN git clone --branch v0.43.16 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
+RUN git clone --branch v0.43.17 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
 	mkdir -p /out/usr/local/lib/tcl9/site-tcl && \
 	tbuild-lite build_tm m2 && \
