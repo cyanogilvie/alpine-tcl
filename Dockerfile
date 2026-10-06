@@ -991,7 +991,7 @@ RUN make DESTDIR=/out install
 # them. Sub-packages inherit via `FROM package-pixel-core`.
 FROM tcl-build-base AS package-pixel-src
 WORKDIR /src/pixel
-RUN git clone -q -b v4.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pixel .
+RUN git clone -q -b v4.3.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pixel .
 
 FROM package-pixel-src AS package-pixel-core
 WORKDIR /src/pixel/pixel_core
@@ -1176,7 +1176,7 @@ FROM tcl-build-base AS package-parsetcl
 COPY --link --from=base-build-expat	/out /
 COPY --link --from=package-tdom		/out /
 WORKDIR /src/parsetcl
-RUN git clone -q -b v0.4.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/parsetcl .
+RUN git clone -q -b v0.4.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/parsetcl .
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-parsetcl >>>
@@ -1260,7 +1260,7 @@ COPY --from=package-tbuild /out /
 # package-cflib <<<
 FROM tbuild-base AS package-cflib
 WORKDIR /src/cflib
-RUN git clone --recurse-submodules --shallow-submodules --branch 1.16.1 --single-branch --depth 1 https://github.com/cyanogilvie/cflib .
+RUN git clone --recurse-submodules --shallow-submodules --branch 1.16.2 --single-branch --depth 1 https://github.com/cyanogilvie/cflib .
 RUN tbuild-lite
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
 RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
@@ -1277,7 +1277,7 @@ RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/
 # package-netdgram <<<
 FROM tbuild-base AS package-netdgram
 WORKDIR /src/netdgram
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.12 --single-branch --depth 1 https://github.com/cyanogilvie/netdgram .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.9.13 --single-branch --depth 1 https://github.com/cyanogilvie/netdgram .
 RUN tbuild-lite
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
 RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp -a tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
