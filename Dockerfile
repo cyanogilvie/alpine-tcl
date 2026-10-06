@@ -92,7 +92,7 @@ RUN dnf install -q -y \
 # instead. Alpine isn't affected because musl's posix_spawn implementation
 # uses fork(), not clone3.
 RUN cd /tmp \
- && wget -q https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
+ && wget -q https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz \
  && tar xf make-4.4.1.tar.gz \
  && cd make-4.4.1 \
  && ac_cv_func_posix_spawn=no ac_cv_func_posix_spawnp=no \
@@ -366,7 +366,7 @@ RUN DESTDIR=/out ninja install
 # jpeg-turbo >>>
 # ncurses <<<
 FROM base-build AS base-build-ncurses
-ADD --unpack https://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.6.tar.gz /src
+ADD --unpack https://mirrors.kernel.org/gnu/ncurses/ncurses-6.6.tar.gz /src
 WORKDIR /src/ncurses-6.6
 RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" \
 		--prefix=/usr/local \
@@ -413,7 +413,7 @@ RUN make install DESTDIR=/out
 # libpng >>>
 # readline <<<
 FROM base-build AS base-build-readline
-ADD --unpack https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz /src
+ADD --unpack https://mirrors.kernel.org/gnu/readline/readline-8.3.tar.gz /src
 WORKDIR /src/readline-8.3
 COPY --link --from=base-build-ncurses			/out /
 RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --disable-shared --disable-install-examples --enable-year2038 --with-curses
@@ -472,7 +472,7 @@ RUN make install DESTDIR=/out
 # libunwind >>>
 # gperf <<<
 FROM base-build AS base-build-gperf
-ADD --unpack http://ftp.gnu.org/pub/gnu/gperf/gperf-3.3.tar.gz /src
+ADD --unpack https://mirrors.kernel.org/gnu/gperf/gperf-3.3.tar.gz /src
 WORKDIR /src/gperf-3.3
 RUN set > /tmp/vars
 RUN ./configure
@@ -481,7 +481,7 @@ RUN make install DESTDIR=/out
 # gperf >>>
 # gettext <<<
 FROM base-build AS base-build-gettext
-ADD --unpack https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz /src
+ADD --unpack https://mirrors.kernel.org/gnu/gettext/gettext-0.26.tar.gz /src
 WORKDIR /src/gettext-0.26
 COPY --link --from=base-build-ncurses			/out /
 RUN ./configure --enable-pic --disable-shared --enable-static --enable-year2038
@@ -895,8 +895,8 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 
 # package-jitc <<<
 FROM tcl-build-base AS package-jitc
-ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.3/jitc-v0.8.3.tar.gz /src
-WORKDIR /src/jitc-v0.8.3
+ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.4/jitc-v0.8.4.tar.gz /src
+WORKDIR /src/jitc-v0.8.4
 RUN CXXFLAGS="" meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out --tags runtime
 # package-jitc >>>
