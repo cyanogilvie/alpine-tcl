@@ -5,7 +5,7 @@ ARG TCLCOPYTARGET=optimized
 # Alpine linux <<<
 #FROM alpine:3.20.3 AS src-alpine
 #FROM alpine:3.22.2 AS src-alpine
-FROM alpine:3.23.4 AS src-alpine
+FROM public.ecr.aws/docker/library/alpine:3.23.4 AS src-alpine
 RUN apk upgrade --no-cache --update
 ENV LANG=en_US.UTF-8
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
@@ -1654,7 +1654,7 @@ RUN /bootstrap/bin/tclsh /var/task/build_apk.tcl
 # Container image for the APKINDEX-regeneration Lambda created by the
 # bld/sam/pkgrepo stack. Alpine base picks up apk-tools + abuild-sign for
 # free; we just add curl/jq/aws-cli for the runtime-API loop and S3 I/O.
-FROM alpine:3.23.4 AS pkgrepo-index-lambda
+FROM public.ecr.aws/docker/library/alpine:3.23.4 AS pkgrepo-index-lambda
 RUN apk add --no-cache --update \
 	abuild \
 	apk-tools \
