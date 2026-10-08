@@ -40,6 +40,7 @@ set packages {
 	{Pixel_webp pixel_source}
 	{Pixel_imlib2 pixel_source}
 	chantricks
+	{myme https://github.com/cyanogilvie/myme}
 	openapi
 	docker
 	{aws https://github.com/cyanogilvie/aws-tcl 1.2}

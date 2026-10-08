@@ -74,6 +74,7 @@ packages (most are from https://github.com/cyanogilvie or https://github.com/Rub
 - jitc
 - logging
 - m2
+- myme
 - names
 - netdgram
 - openapi
