@@ -910,7 +910,7 @@ RUN meson install -C builddir --destdir /out
 # package-pgwire <<<
 FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b36 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b37 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
@@ -1121,8 +1121,8 @@ RUN meson install -C builddir --destdir /out
 # package-rl_json >>>
 # package-cbor <<<
 FROM tcl-build-base AS package-cbor
-ADD --unpack https://github.com/cyanogilvie/cbor/releases/download/v1.1/cbor-v1.1.tar.gz /src
-WORKDIR /src/cbor-v1.1
+ADD --unpack https://github.com/cyanogilvie/cbor/releases/download/v1.2.1/cbor-v1.2.1.tar.gz /src
+WORKDIR /src/cbor-v1.2.1
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-cbor >>>
