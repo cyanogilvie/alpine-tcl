@@ -2,6 +2,9 @@ VER=v0.9.123
 PLATFORM=linux/arm64,linux/amd64
 DEST=--push
 
+# Legacy alpine-tcl image targets (alpine-tcl:v0.9.x) are Tcl 8.7b1 + Thread 2.9b1
+LEGACY_TCLVER ?= 8.7
+
 CONTAINER_ENV = -v "`pwd`/here:/here" --network host --ulimit core=-1
 
 all: alpine-tcl
@@ -12,19 +15,19 @@ ubuntu-tcl: Dockerfile.ubuntu
 alpine-tcl: Dockerfile
 	#docker buildx build --target tcl-build --platform linux/amd64 -t alpine-tcl-build .
 	#docker buildx build --target tcl --platform linux/amd64 -t cyanogilvie/alpine-tcl:$(VER) .
-	docker buildx build $(EXTRA) $(DEST) --provenance=false --target tcl-stripped --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-stripped -t cyanogilvie/alpine-tcl:latest .
+	docker buildx build --build-arg TCLVER=$(LEGACY_TCLVER) $(EXTRA) $(DEST) --provenance=false --target tcl-stripped --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-stripped -t cyanogilvie/alpine-tcl:latest .
 
 alpine-tcl-build-base: Dockerfile
-	docker buildx build $(EXTRA) $(DEST) --target tcl-build-base --platform $(PLATFORM) -t alpine-tcl-build-base .
+	docker buildx build --build-arg TCLVER=$(LEGACY_TCLVER) $(EXTRA) $(DEST) --target tcl-build-base --platform $(PLATFORM) -t alpine-tcl-build-base .
 
 alpine-tcl-build-base-arm64: Dockerfile
-	docker buildx build $(EXTRA) $(DEST) --target tcl-build-base --platform linux/arm64 -t alpine-tcl-build-base-arm64 .
+	docker buildx build --build-arg TCLVER=$(LEGACY_TCLVER) $(EXTRA) $(DEST) --target tcl-build-base --platform linux/arm64 -t alpine-tcl-build-base-arm64 .
 
 alpine-tcl-gdb: Makefile Dockerfile
-	docker buildx build $(EXTRA) $(DEST) --target tcl-gdb --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-gdb .
+	docker buildx build --build-arg TCLVER=$(LEGACY_TCLVER) $(EXTRA) $(DEST) --target tcl-gdb --platform $(PLATFORM) -t cyanogilvie/alpine-tcl:$(VER)-gdb .
 
 alpine-tcl-test: Dockerfile
-	docker buildx build --load --target tcl -t alpine-tcl:test .
+	docker buildx build --build-arg TCLVER=$(LEGACY_TCLVER) --load --target tcl -t alpine-tcl:test .
 	touch alpine-tcl-test
 
 al2023-tcl: Dockerfile
@@ -44,7 +47,7 @@ package_report: alpine-tcl
 
 gdb:
 	echo "/tmp/cores" | sudo tee /proc/sys/kernel/core_pattern
-	docker buildx build --target tcl-gdb --platform linux/amd64 -t alpine-tcl-gdb .
+	docker buildx build --build-arg TCLVER=$(LEGACY_TCLVER) --target tcl-gdb --platform linux/amd64 -t alpine-tcl-gdb .
 	docker run --rm -it --init --name rl-nsadmin --cap-add=SYS_PTRACE --security-opt seccomp=unconfined $(CONTAINER_ENV) alpine-tcl-gdb
 
 aws-lambda-rie-arm64:

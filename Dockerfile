@@ -174,6 +174,16 @@ RUN update-alternatives --set c++ /usr/bin/g++-14
 FROM src-$DIST AS src
 FROM src-dev-$DIST AS src-dev
 
+# Runtime base for the tcl / tcl-stripped images: the same runtime deps the
+# cftcl apk declares (musl-dev: jitc's headers; musl-obstack: parsetcl;
+# libstdc++: jitc's re2c and Pixel_phash; libgcc: Pixel_svg_cairo), plus
+# terminfo for ck (its static ncurses has no compiled-in entries)
+FROM src-alpine AS src-runtime-alpine
+RUN apk add --no-cache --update musl-dev musl-obstack libstdc++ libgcc ncurses-terminfo-base
+FROM src-al2023 AS src-runtime-al2023
+FROM src-ubuntu AS src-runtime-ubuntu
+FROM src-runtime-$DIST AS src-runtime
+
 FROM src-dev AS base-amd64
 # Since Nov 2020 Lambda has supported AVX2 (and haswell) in all regions except China
 ARG CFLAGS_ARCH="-O3 -march=haswell -flto=auto -ffat-lto-objects -fPIC"
@@ -239,12 +249,12 @@ TCL_STUB_LIB_SPEC="-L/bootstrap/lib -ltclstub"
 EOF
 RUN mkdir -p /tmp/bootstrap/aws \
  && cd /tmp/bootstrap/aws \
- && git clone --recurse-submodules --shallow-submodules --branch v2.0a33 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
+ && git clone --recurse-submodules --shallow-submodules --branch v2.0a34 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
  && meson setup build --prefix=/bootstrap -Dtm_mode=ziplet --buildtype=release --strip \
  && meson install -C build \
  && mkdir -p /tmp/bootstrap/tclsignal \
  && cd /tmp/bootstrap/tclsignal \
- && git clone -b v1.4.5-cyan1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tclsignal . \
+ && git clone -b v1.4.5-cyan2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tclsignal . \
  && autoconf && ./configure --with-tcl=/bootstrap/lib --prefix=/bootstrap \
  && make install-binaries install-libraries \
  && cd / \
@@ -854,8 +864,8 @@ ARG SITETCL=/usr/local/lib/tcl8/site-tcl
 # tclconfig: tip of main
 ADD --unpack https://core.tcl-lang.org/tclconfig/tarball/6e82b0097c/tclconfig.tar.gz /src
 WORKDIR /src/tclconfig
-## thread: tip of thread3-for-tcl8
-ADD --unpack https://core.tcl-lang.org/thread/tarball/586530a607/thread.tar.gz /src
+# thread: 2.9b1 (thread-2-branch, as shipped in alpine-tcl v0.9.x)
+ADD --unpack https://core.tcl-lang.org/thread/tarball/61e980ef5c/thread.tar.gz /src
 WORKDIR /src/thread
 RUN ln -s ../tclconfig
 # tcl8.7 >>>
@@ -948,7 +958,7 @@ RUN DESTDIR=/out cmake --build . --config Release --target install
 # package-brotli <<<
 FROM tcl-build-base AS package-brotli
 WORKDIR /src/brotli
-RUN git clone -q -b v0.4.5 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-brotli .
+RUN git clone -q -b v0.4.6 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-brotli .
 COPY --link --from=base-build-libbrotli			/out /
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
@@ -1120,11 +1130,16 @@ RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-rl_json >>>
 # package-cbor <<<
-FROM tcl-build-base AS package-cbor
+FROM tcl-build-base AS package-cbor-tcl9.0
 ADD --unpack https://github.com/cyanogilvie/cbor/releases/download/v1.2.1/cbor-v1.2.1.tar.gz /src
 WORKDIR /src/cbor-v1.2.1
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
+# cbor requires Tcl 9: legacy 8.7 builds get an empty stage (aws-tcl only
+# needs it for smithy-rpc-v2-cbor-only services, and fails cleanly without it)
+FROM tcl-build-base AS package-cbor-tcl8.7
+RUN mkdir -p /out/usr/local /src
+FROM package-cbor-tcl${TCLVER} AS package-cbor
 # package-cbor >>>
 # package-hash <<<
 FROM tcl-build-base AS package-hash
@@ -1152,7 +1167,7 @@ COPY tcl/tclshrc /out/root/.tclshrc
 # package-tclsignal <<<
 FROM tcl-build-base AS package-tclsignal
 WORKDIR /src/tclsignal
-RUN git clone -b v1.4.5-cyan1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tclsignal .
+RUN git clone -b v1.4.5-cyan2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tclsignal .
 RUN autoconf && ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --enable-symbols && \
 	make -j all && \
 	make DESTDIR=/out install-binaries install-libraries clean
@@ -1410,7 +1425,7 @@ COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-s2n			/out /
 COPY --link --from=package-chantricks	/out /
 COPY --link --from=package-tomcrypt		/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a33 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a34 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN ldconfig || true
 RUN meson setup builddir --buildtype=release -Ddebug=true -Dtm_mode=brlet
 RUN meson install -C builddir --destdir /out --skip-subprojects
@@ -1718,7 +1733,7 @@ COPY --link --from=package-parsetcl			/out /
 COPY --link --from=package-ck				/out /
 COPY --link --from=package-resolve			/out /
 COPY --link --from=package-tcllib			/out /
-COPY --link --from=package-tdbc				/out /
+#COPY --link --from=package-tdbc				/out /
 COPY --link --from=package-s2n				/out /
 COPY --link --from=package-sockopt			/out /
 COPY --link --from=package-chantricks		/out /
@@ -1748,10 +1763,12 @@ RUN ldconfig || true
 
 # misc local bits
 COPY tcl/tm /usr/local/lib/tcl8/site-tcl
+COPY tcl/tm /usr/local/lib/tcl9/site-tcl
 COPY tools/* /usr/local/bin/
 
 # common_sighandler
 COPY common_sighandler-*.tm /usr/local/lib/tcl8/site-tcl/
+COPY common_sighandler-*.tm /usr/local/lib/tcl9/site-tcl/
 
 # meta
 #RUN /usr/local/bin/package_report
@@ -1786,7 +1803,7 @@ COPY --link --from=package-parsetcl		/src /src
 COPY --link --from=package-ck			/src /src
 COPY --link --from=package-resolve		/src /src
 COPY --link --from=package-tcllib		/src /src
-COPY --link --from=package-tdbc			/src /src
+#COPY --link --from=package-tdbc			/src /src
 COPY --link --from=package-s2n			/src /src
 COPY --link --from=package-sockopt		/src /src
 COPY --link --from=package-chantricks	/src /src
@@ -1822,7 +1839,7 @@ RUN find /usr/local -name "*.so" -print0 | xargs -0 strip
 # tcl-build-stripped >>>
 
 # tcl <<<
-FROM src AS tcl
+FROM src-runtime AS tcl
 COPY --link --from=tcl-build			/usr/local /usr/local
 COPY --link --from=tcl-build			/root/.tclshrc /root/
 RUN ldconfig || true
@@ -1832,7 +1849,7 @@ ENTRYPOINT ["tclsh"]
 # tcl >>>
 
 # tcl-stripped <<<
-FROM src AS tcl-stripped
+FROM src-runtime AS tcl-stripped
 COPY --link --from=tcl-build-stripped	/usr/local /usr/local
 COPY --link --from=tcl-build			/root/.tclshrc /root/
 RUN ldconfig || true
