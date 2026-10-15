@@ -550,8 +550,8 @@ RUN meson install -C build --destdir /out
 FROM base-build AS base-build-pixman
 #WORKDIR /src/pixman
 #RUN wget -q https://cairographics.org/releases/pixman-0.46.4.tar.gz -O - | tar xz --strip-components=1
-# cairographics.org is unreliable (resets/timeouts break the ADD cache-key fetch); Debian's orig tarball is byte-identical
-ADD --unpack --checksum=sha256:d09c44ebc3bd5bee7021c79f922fe8fb2fb57f7320f55e97ff9914d2346a591c https://deb.debian.org/debian/pool/main/p/pixman/pixman_0.46.4.orig.tar.gz /src
+# cairographics.org is unreliable (resets/timeouts break the ADD cache-key fetch): self-hosted, see make mirror_distfile
+ADD --unpack --checksum=sha256:d09c44ebc3bd5bee7021c79f922fe8fb2fb57f7320f55e97ff9914d2346a591c https://cftcl.cyanogilvie.com/distfiles/pixman-0.46.4.tar.gz /src
 WORKDIR /src/pixman-0.46.4
 COPY --link --from=base-build-ninja				/out /
 COPY --link --from=base-build-glib				/out /
@@ -640,8 +640,8 @@ RUN meson install -C build/ --destdir /out
 FROM base-build AS base-build-cairo
 #WORKDIR /src/cairo
 #RUN wget -q https://cairographics.org/releases/cairo-1.18.4.tar.xz -O - | tar xJ --strip-components=1
-# cairographics.org is unreliable; Debian's orig tarball is byte-identical
-ADD --unpack --checksum=sha256:445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb https://deb.debian.org/debian/pool/main/c/cairo/cairo_1.18.4.orig.tar.xz /src
+# cairographics.org is unreliable: self-hosted, see make mirror_distfile
+ADD --unpack --checksum=sha256:445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb https://cftcl.cyanogilvie.com/distfiles/cairo-1.18.4.tar.xz /src
 WORKDIR /src/cairo-1.18.4
 COPY --link --from=base-build-expat				/out /
 COPY --link --from=base-build-fontconfig		/out /

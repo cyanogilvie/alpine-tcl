@@ -289,6 +289,7 @@ pkgrepo_site_upload:
 	aws s3 sync --region $(PKGREPO_REGION) \
 		bld/sam/pkgrepo/site/ "s3://$$bucket/" \
 		--exclude 'alpine/*' --exclude 'deb/*' --exclude 'rpm/*' --exclude 'zip/*' \
+		--exclude 'distfiles/*' \
 		--cache-control "public, max-age=300" \
 		--delete; \
 	if [ -n "$$dist" ]; then \
@@ -385,12 +386,48 @@ release_site_upload: site/index.html
 	aws s3 sync --region $(RELEASE_REGION) \
 		site/ "s3://$$bucket/" \
 		--exclude 'alpine/*' --exclude 'deb/*' --exclude 'rpm/*' --exclude 'zip/*' \
+		--exclude 'distfiles/*' \
 		--cache-control "public, max-age=300" \
 		--delete; \
 	if [ -n "$$dist" ]; then \
 		aws cloudfront create-invalidation --distribution-id "$$dist" \
 			--paths '/index.html' '/' --query 'Invalidation.Id' --output text; \
 	fi
+
+# Self-host an upstream source tarball whose site is unreliable (cairographics,
+# GNU ftp, ...) under distfiles/ in the release bucket, served publicly by the
+# release CloudFront distribution, so builders fetch it anonymously like any
+# other ADD URL.  SHA256 is the checksum upstream publishes, verified before
+# upload; an existing mirror with different content is never overwritten.
+# Usage: make mirror_distfile URL=https://.../foo-1.2.tar.xz SHA256=<hex>
+DISTFILES_BASE ?= https://cftcl.cyanogilvie.com/distfiles
+mirror_distfile:
+	@test -n "$(URL)" -a -n "$(SHA256)" || { echo "usage: make mirror_distfile URL=<upstream url> SHA256=<upstream sha256>"; exit 1; }; \
+	bucket=$(call release_cfn_output,$(RELEASE_STACK),BucketName); \
+	test -n "$$bucket" || { echo "release stack not deployed"; exit 1; }; \
+	name=$$(basename "$(URL)"); key="distfiles/$$name"; \
+	existing=$$(aws s3api head-object --region $(RELEASE_REGION) --bucket "$$bucket" --key "$$key" \
+		--query 'Metadata.sha256' --output text 2>/dev/null); \
+	if [ -n "$$existing" ]; then \
+		if [ "$$existing" = "$(SHA256)" ]; then echo "already mirrored: $$key"; \
+		else echo "REFUSING: $$key exists with sha256 $$existing"; exit 1; fi; \
+	else \
+		tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT; \
+		curl -fsSL --retry 8 --retry-all-errors --retry-delay 5 -o "$$tmp/$$name" "$(URL)" || exit 1; \
+		echo "$(SHA256)  $$tmp/$$name" | sha256sum -c --quiet || { echo "checksum mismatch for $(URL)"; exit 1; }; \
+		case "$$name" in \
+			*.tar.gz|*.tgz)	ctype=application/gzip ;; \
+			*.xz)			ctype=application/x-xz ;; \
+			*.bz2)			ctype=application/x-bzip2 ;; \
+			*.zst)			ctype=application/zstd ;; \
+			*)				ctype=application/octet-stream ;; \
+		esac; \
+		aws s3 cp --region $(RELEASE_REGION) --no-progress "$$tmp/$$name" "s3://$$bucket/$$key" \
+			--content-type "$$ctype" \
+			--cache-control "public, max-age=31536000, immutable" \
+			--metadata "sha256=$(SHA256),source-url=$(URL)" || exit 1; \
+	fi; \
+	echo "ADD --unpack --checksum=sha256:$(SHA256) $(DISTFILES_BASE)/$$name /src"
 
 clean:
 	-rm -r aws-lambda-rie-arm64 aws-lamda-rie-x86_64
@@ -401,4 +438,5 @@ clean:
 	pkgrepo_init_signing_key pkgrepo_apk pkgrepo_apk_upload \
 	pkgrepo_site_upload \
 	release_deploy release_authorize_github \
-	release_trigger_x86 release_trigger_arm64 release_site_upload
+	release_trigger_x86 release_trigger_arm64 release_site_upload \
+	mirror_distfile

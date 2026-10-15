@@ -26,3 +26,19 @@ When testing changes, build locally instead:
     make alpine-tcl DEST=--load PLATFORM=linux/amd64 VER=<ver>-test
 
 `make upload` is obsolete.
+
+## Unreliable upstream sources
+
+Remote `ADD` re-fetches its URL on every build to compute the cache key, so a
+flaky upstream site can fail a build even when the layer is already cached. For
+sources like that, mirror the tarball into the release bucket and point the
+`ADD` at the mirror:
+
+    make mirror_distfile URL=<upstream url> SHA256=<upstream's published sha256>
+
+This verifies the checksum, uploads the file to `distfiles/` in the cftcl-release
+bucket (served publicly at `https://cftcl.cyanogilvie.com/distfiles/`, so
+builders need no credentials), and prints the `ADD --checksum=...` line to use.
+It never overwrites an existing mirror file with different content. Mirror the
+new version before you bump the URL, and keep the `--checksum` on every
+mirrored `ADD`.
