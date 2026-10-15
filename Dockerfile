@@ -1107,8 +1107,8 @@ RUN meson install -C builddir --destdir /out --skip-subprojects
 # package-tdom >>>
 # package-parse_args <<<
 FROM tcl-build-base AS package-parse_args
-ADD --unpack https://github.com/RubyLane/parse_args/releases/download/v0.7.1/parse_args-v0.7.1.tar.gz /src
-WORKDIR /src/parse_args-v0.7.1
+ADD --unpack https://github.com/RubyLane/parse_args/releases/download/v0.7.2/parse_args-v0.7.2.tar.gz /src
+WORKDIR /src/parse_args-v0.7.2
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-parse_args >>>
