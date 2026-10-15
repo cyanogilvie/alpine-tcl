@@ -180,6 +180,9 @@ proc subpkg {name args} { #<<<
 		file mkdir $subpkgdir
 		cd $subpkgdir
 		uplevel 1 $script
+		# mkpkg packages [pwd], and the script may have cd'd elsewhere
+		# (dbg works in $pkgdir), which would package the wrong tree
+		cd $subpkgdir
 		mkpkg -subpkg $name {*}$extra
 	} finally {
 		unset -nocomplain subpkgdir
