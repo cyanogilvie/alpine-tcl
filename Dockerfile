@@ -376,7 +376,7 @@ RUN DESTDIR=/out ninja install
 # jpeg-turbo >>>
 # ncurses <<<
 FROM base-build AS base-build-ncurses
-ADD --unpack https://mirrors.kernel.org/gnu/ncurses/ncurses-6.6.tar.gz /src
+ADD --unpack --checksum=sha256:355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11 https://cftcl.cyanogilvie.com/distfiles/ncurses-6.6.tar.gz /src
 WORKDIR /src/ncurses-6.6
 RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" \
 		--prefix=/usr/local \
@@ -423,7 +423,7 @@ RUN make install DESTDIR=/out
 # libpng >>>
 # readline <<<
 FROM base-build AS base-build-readline
-ADD --unpack https://mirrors.kernel.org/gnu/readline/readline-8.3.tar.gz /src
+ADD --unpack --checksum=sha256:fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc https://cftcl.cyanogilvie.com/distfiles/readline-8.3.tar.gz /src
 WORKDIR /src/readline-8.3
 COPY --link --from=base-build-ncurses			/out /
 RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --disable-shared --disable-install-examples --enable-year2038 --with-curses
