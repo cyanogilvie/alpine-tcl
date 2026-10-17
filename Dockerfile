@@ -1430,6 +1430,7 @@ COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-s2n			/out /
 COPY --link --from=package-chantricks	/out /
 COPY --link --from=package-tomcrypt		/out /
+COPY --link --from=package-cbor			/out /
 RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a36 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN ldconfig || true
 RUN meson setup builddir --buildtype=release -Ddebug=true -Dtm_mode=brlet
