@@ -74,7 +74,7 @@ BUILDER=
 PLATFORM=
 
 DIST=ubuntu
-TCLVER=9.0
+TCLVER=9.1
 DESTDIR=/opt/tcl9g
 TCLCOPYTARGET=debug
 copy_build:

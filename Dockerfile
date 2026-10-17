@@ -1,5 +1,5 @@
 ARG DIST=alpine
-ARG TCLVER=9.0
+ARG TCLVER=9.1
 ARG TCLCOPYTARGET=optimized
 
 # Alpine linux <<<
@@ -249,7 +249,7 @@ TCL_STUB_LIB_SPEC="-L/bootstrap/lib -ltclstub"
 EOF
 RUN mkdir -p /tmp/bootstrap/aws \
  && cd /tmp/bootstrap/aws \
- && git clone --recurse-submodules --shallow-submodules --branch v2.0a35 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
+ && git clone --recurse-submodules --shallow-submodules --branch v2.0a36 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
  && meson setup build --prefix=/bootstrap -Dtm_mode=ziplet --buildtype=release --strip \
  && meson install -C build \
  && mkdir -p /tmp/bootstrap/tclsignal \
@@ -840,10 +840,10 @@ FROM base AS tcl-build-base-common
 ARG TCLVER
 RUN git config --global advice.detachedHead false
 
-# tcl9.0 <<<
-FROM tcl-build-base-common AS tcl-build-base-tcl9.0
-# tcl: core-9-0-3 tag
-ADD --unpack https://core.tcl-lang.org/tcl/tarball/core-9-0-3/tcl.tar.gz /src
+# tcl9.1 <<<
+FROM tcl-build-base-common AS tcl-build-base-tcl9.1
+# tcl: core-9-1-0 tag
+ADD --unpack https://core.tcl-lang.org/tcl/tarball/core-9-1-0/tcl.tar.gz /src
 WORKDIR /src/tcl
 ARG SITETCL=/usr/local/lib/tcl9/site-tcl
 # tclconfig: tip of main
@@ -856,7 +856,7 @@ RUN ln -s ../tclconfig
 # A process exiting with tpool workers alive could segfault: see the patch
 COPY patches/thread/tpool-worker-exit.patch /tmp/
 RUN git apply -v /tmp/tpool-worker-exit.patch
-# tcl9.0 >>>
+# tcl9.1 >>>
 # tcl8.7 <<<
 FROM tcl-build-base-common AS tcl-build-base-tcl8.7
 # tcl: tip of core-8-branch, now claimed to be defunct
@@ -1135,9 +1135,9 @@ RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-rl_json >>>
 # package-cbor <<<
-FROM tcl-build-base AS package-cbor-tcl9.0
-ADD --unpack https://github.com/cyanogilvie/cbor/releases/download/v1.2.1/cbor-v1.2.1.tar.gz /src
-WORKDIR /src/cbor-v1.2.1
+FROM tcl-build-base AS package-cbor-tcl9.1
+ADD --unpack https://github.com/cyanogilvie/cbor/releases/download/v1.2.2/cbor-v1.2.2.tar.gz /src
+WORKDIR /src/cbor-v1.2.2
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # cbor requires Tcl 9: legacy 8.7 builds get an empty stage (aws-tcl only
@@ -1288,7 +1288,7 @@ COPY --from=package-tbuild /out /
 # package-cflib <<<
 FROM tbuild-base AS package-cflib
 WORKDIR /src/cflib
-RUN git clone --recurse-submodules --shallow-submodules --branch 1.16.2 --single-branch --depth 1 https://github.com/cyanogilvie/cflib .
+RUN git clone --recurse-submodules --shallow-submodules --branch 1.17.0 --single-branch --depth 1 https://github.com/cyanogilvie/cflib .
 RUN tbuild-lite
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
 RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
@@ -1430,7 +1430,7 @@ COPY --link --from=package-rl_http		/out /
 COPY --link --from=package-s2n			/out /
 COPY --link --from=package-chantricks	/out /
 COPY --link --from=package-tomcrypt		/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a35 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a36 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN ldconfig || true
 RUN meson setup builddir --buildtype=release -Ddebug=true -Dtm_mode=brlet
 RUN meson install -C builddir --destdir /out --skip-subprojects

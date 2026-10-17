@@ -32,7 +32,7 @@ env:
     PKGREL: "0"
     PKGNAME: "cftcl"
     DIST: "alpine"
-    TCLVER: "9.0"
+    TCLVER: "9.1"
 
 phases:
   pre_build:

@@ -227,7 +227,7 @@ if {![file isdirectory $env(APK_PAYLOAD_ROOT)$env(TCLROOT)]} {
 
 # Generate the APKBUILD. !check (no test harness), !strip (abuild's
 # stripbin runs plain `strip`, which would discard the zipfs script-library
-# image appended to libtcl9.0.so; our custom dbg() strips the binaries
+# image appended to libtcl9.x.so; our custom dbg() strips the binaries
 # safely instead, preserving any appended archive), !tracedeps (we have no
 # shared-lib deps the host resolver should track).
 # Strip a leading "v" from $env(VER): apk-tools' version parser doesn't accept
@@ -318,7 +318,7 @@ _appended_zip_offset() {
 }
 
 # Like abuild's default_dbg, but ELFs carrying an appended archive (Tcl zipfs:
-# libtcl9.0.so holds the script library) get the archive detached, objcopy
+# libtcl9.x.so holds the script library) get the archive detached, objcopy
 # strips the ELF, then the archive is re-appended so the runtime still mounts.
 dbg() {
 	local type src dst ino tmp arc zip
@@ -437,7 +437,7 @@ subpkg dbg -desc {debug symbols} {
 	amove $prefix/src
 
 	# Like abuild's default_dbg, but ELFs carrying an appended archive (Tcl zipfs:
-	# libtcl9.0.so holds the script library) get the archive detached, objcopy
+	# libtcl9.x.so holds the script library) get the archive detached, objcopy
 	# strips the ELF, then the archive is re-appended so the runtime still mounts.
 	cd $pkgdir
 	set elves	[split [string trim [exec scanelf --recursive --symlink --etype ET_DYN --nobanner --format %p $prefix/]] \n]
