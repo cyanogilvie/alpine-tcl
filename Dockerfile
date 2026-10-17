@@ -849,10 +849,13 @@ ARG SITETCL=/usr/local/lib/tcl9/site-tcl
 # tclconfig: tip of main
 ADD --unpack https://core.tcl-lang.org/tclconfig/tarball/6e82b0097c/tclconfig.tar.gz /src
 WORKDIR /src/tclconfig
-# thread: tip of main
-ADD --unpack https://core.tcl-lang.org/thread/tarball/thread-3-0-5/thread.tar.gz /src
+# thread: thread-3-0-7 tag
+ADD --unpack https://core.tcl-lang.org/thread/tarball/thread-3-0-7/thread.tar.gz /src
 WORKDIR /src/thread
 RUN ln -s ../tclconfig
+# A process exiting with tpool workers alive could segfault: see the patch
+COPY patches/thread/tpool-worker-exit.patch /tmp/
+RUN git apply -v /tmp/tpool-worker-exit.patch
 # tcl9.0 >>>
 # tcl8.7 <<<
 FROM tcl-build-base-common AS tcl-build-base-tcl8.7
