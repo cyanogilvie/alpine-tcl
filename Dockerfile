@@ -1384,8 +1384,8 @@ RUN ln -s ../tclconfig && \
 # package-tdbc >>>
 # package-s2n <<<
 FROM tcl-build-base AS package-s2n
-ADD --unpack https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.8.4/s2n-0.8.4.tar.gz /src
-WORKDIR /src/s2n-0.8.4
+ADD --unpack https://github.com/cyanogilvie/tcl-s2n/releases/download/v0.8.5/s2n-0.8.5.tar.gz /src
+WORKDIR /src/s2n-0.8.5
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-s2n >>>
