@@ -1217,7 +1217,7 @@ RUN meson install -C builddir --destdir /out
 # package-myme <<<
 FROM tcl-build-base AS package-myme
 WORKDIR /src/myme
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.1 --single-branch --depth 1 https://github.com/cyanogilvie/myme .
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.0.2 --single-branch --depth 1 https://github.com/cyanogilvie/myme .
 RUN meson setup builddir --buildtype=release
 RUN meson test -C builddir
 RUN meson install -C builddir --destdir /out
@@ -1597,7 +1597,7 @@ COPY --link --from=package-tcllib			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-s2n				/out/usr/local	/out$TCLROOT
 COPY --link --from=package-sockopt			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-chantricks		/out/usr/local	/out$TCLROOT
-COPY --link --from=package-myme			/out/usr/local	/out$TCLROOT
+COPY --link --from=package-myme				/out/usr/local	/out$TCLROOT
 COPY --link --from=package-openapi			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-docker			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-gc_class			/out/usr/local	/out$TCLROOT
@@ -1743,7 +1743,7 @@ COPY --link --from=package-tcllib			/out /
 COPY --link --from=package-s2n				/out /
 COPY --link --from=package-sockopt			/out /
 COPY --link --from=package-chantricks		/out /
-COPY --link --from=package-myme			/out /
+COPY --link --from=package-myme				/out /
 COPY --link --from=package-openapi			/out /
 COPY --link --from=package-docker			/out /
 COPY --link --from=package-gc_class			/out /
@@ -1813,7 +1813,7 @@ COPY --link --from=package-tcllib		/src /src
 COPY --link --from=package-s2n			/src /src
 COPY --link --from=package-sockopt		/src /src
 COPY --link --from=package-chantricks	/src /src
-COPY --link --from=package-myme		/src /src
+COPY --link --from=package-myme			/src /src
 COPY --link --from=package-openapi		/src /src
 COPY --link --from=package-docker		/src /src
 COPY --link --from=package-gc_class		/src /src
