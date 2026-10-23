@@ -92,7 +92,8 @@ RUN dnf install -q -y \
 # instead. Alpine isn't affected because musl's posix_spawn implementation
 # uses fork(), not clone3.
 RUN cd /tmp \
- && wget -q https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz \
+ && wget -q https://cftcl.cyanogilvie.com/distfiles/make-4.4.1.tar.gz \
+ && echo 'dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3  make-4.4.1.tar.gz' | sha256sum -c --quiet \
  && tar xf make-4.4.1.tar.gz \
  && cd make-4.4.1 \
  && ac_cv_func_posix_spawn=no ac_cv_func_posix_spawnp=no \
@@ -482,7 +483,7 @@ RUN make install DESTDIR=/out
 # libunwind >>>
 # gperf <<<
 FROM base-build AS base-build-gperf
-ADD --unpack https://mirrors.kernel.org/gnu/gperf/gperf-3.3.tar.gz /src
+ADD --unpack --checksum=sha256:fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8 https://cftcl.cyanogilvie.com/distfiles/gperf-3.3.tar.gz /src
 WORKDIR /src/gperf-3.3
 RUN set > /tmp/vars
 RUN ./configure
@@ -491,7 +492,7 @@ RUN make install DESTDIR=/out
 # gperf >>>
 # gettext <<<
 FROM base-build AS base-build-gettext
-ADD --unpack https://mirrors.kernel.org/gnu/gettext/gettext-0.26.tar.gz /src
+ADD --unpack --checksum=sha256:39acf4b0371e9b110b60005562aace5b3631fed9b1bb9ecccfc7f56e58bb1d7f https://cftcl.cyanogilvie.com/distfiles/gettext-0.26.tar.gz /src
 WORKDIR /src/gettext-0.26
 COPY --link --from=base-build-ncurses			/out /
 RUN ./configure --enable-pic --disable-shared --enable-static --enable-year2038
