@@ -956,15 +956,15 @@ RUN meson install -C builddir --destdir /out
 # package-rl_http >>>
 # libbrotli <<<
 FROM base-build AS base-build-libbrotli
-ADD --unpack https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz /src
-WORKDIR /src/brotli-1.2.0/build
+ADD --unpack https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz /src
+WORKDIR /src/brotli-1.2.1/build
 RUN cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBROTLI_BUILD_TOOLS=OFF ..
 RUN DESTDIR=/out cmake --build . --config Release --target install
 # libbrotli >>>
 # package-brotli <<<
 FROM tcl-build-base AS package-brotli
 WORKDIR /src/brotli
-RUN git clone -q -b v0.4.6 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-brotli .
+RUN git clone -q -b v0.4.7 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/tcl-brotli .
 COPY --link --from=base-build-libbrotli			/out /
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
@@ -1248,7 +1248,7 @@ WORKDIR /src/tcllib-tcllib-2-0
 RUN ./configure
 RUN make DESTDIR=/out install-libraries install-applications clean
 COPY --link --from=package-brotli		/out /
-COPY --link --from=package-chantricks		/out /
+COPY --link --from=package-chantricks	/out /
 COPY tools/compresstcl.tcl /tmp
 COPY tools/ziptcllib.tcl /tmp
 RUN tclsh /tmp/compresstcl.tcl /out/usr/local/lib/tcllib2.0
