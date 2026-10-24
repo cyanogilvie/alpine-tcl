@@ -362,7 +362,7 @@ FROM base-build AS base-build-freetype
 # sourceforge serves an HTML mirror-picker page to BuildKit's HTTP fetcher
 # (user-agent sniffing), so ADD --unpack can't be used for sourceforge URLs.
 WORKDIR /src/freetype
-RUN wget -q https://downloads.sourceforge.net/freetype/freetype-2.14.3.tar.xz -O - | tar xJ --strip-components=1
+RUN wget -q https://downloads.sourceforge.net/freetype/freetype-2.15.0.tar.xz -O - | tar xJ --strip-components=1
 RUN ./configure --disable-shared
 RUN make -j
 RUN make install DESTDIR=/out
@@ -441,8 +441,8 @@ RUN make install DESTDIR=/out
 # webp >>>
 # libtiff <<<
 FROM base-build AS base-build-libtiff
-ADD --unpack https://gitlab.com/libtiff/libtiff/-/archive/v4.7.1/libtiff-v4.7.1.tar.gz /src
-WORKDIR /src/libtiff-v4.7.1
+ADD --unpack https://gitlab.com/libtiff/libtiff/-/archive/v4.7.2/libtiff-v4.7.2.tar.gz /src
+WORKDIR /src/libtiff-v4.7.2
 COPY --link --from=base-build-jpeg-turbo		/out /
 COPY --link --from=base-build-libpng			/out /
 COPY --link --from=base-build-webp				/out /
@@ -502,8 +502,8 @@ RUN make install DESTDIR=/out && \
 # gettext >>>
 # expat <<<
 FROM base-build AS base-build-expat
-ADD --unpack https://github.com/libexpat/libexpat/releases/download/R_2_8_1/expat-2.8.1.tar.gz /src
-WORKDIR /src/expat-2.8.1
+ADD --unpack https://github.com/libexpat/libexpat/releases/download/R_2_9_0/expat-2.9.0.tar.gz /src
+WORKDIR /src/expat-2.9.0
 RUN ./configure --disable-shared --enable-pic --without-examples --without-tests --without-docbook
 RUN make -j
 RUN make install DESTDIR=/out
@@ -565,8 +565,8 @@ RUN meson install -C build --destdir /out
 # pixman >>>
 # libxml2 <<<
 FROM base-build AS base-build-libxml2
-ADD --unpack https://gitlab.gnome.org/GNOME/libxml2/-/archive/v2.15.3/libxml2-v2.15.3.tar.gz /src
-WORKDIR /src/libxml2-v2.15.3
+ADD --unpack https://gitlab.gnome.org/GNOME/libxml2/-/archive/v2.15.4/libxml2-v2.15.4.tar.gz /src
+WORKDIR /src/libxml2-v2.15.4
 COPY --link --from=base-build-ninja				/out /
 COPY --link --from=base-build-zlib				/out /
 RUN meson setup builddir/ --buildtype release --default-library static --optimization 2 --prefer-static \
@@ -591,8 +591,8 @@ RUN meson install -C builddir --destdir /out
 # shared-mime-info >>>
 # gdk-pixbuf2 <<<
 FROM base-build AS base-build-gdk-pixbuf2
-ADD --unpack https://gitlab.gnome.org/GNOME/gdk-pixbuf/-/archive/2.44.6/gdk-pixbuf-2.44.6.tar.gz /src
-WORKDIR /src/gdk-pixbuf-2.44.6
+ADD --unpack https://gitlab.gnome.org/GNOME/gdk-pixbuf/-/archive/2.44.8/gdk-pixbuf-2.44.8.tar.gz /src
+WORKDIR /src/gdk-pixbuf-2.44.8
 COPY --link --from=base-build-glib				/out /
 COPY --link --from=base-build-jpeg-turbo		/out /
 COPY --link --from=base-build-libffi			/out /
@@ -613,8 +613,8 @@ RUN meson install -C builddir --destdir /out
 # libart2 >>>
 # harfbuzz <<<
 FROM base-build AS base-build-harfbuzz
-ADD --unpack https://github.com/harfbuzz/harfbuzz/releases/download/14.2.0/harfbuzz-14.2.0.tar.xz /src
-WORKDIR /src/harfbuzz-14.2.0
+ADD --unpack https://github.com/harfbuzz/harfbuzz/releases/download/15.0.0/harfbuzz-15.0.0.tar.xz /src
+WORKDIR /src/harfbuzz-15.0.0
 COPY --link --from=base-build-ninja				/out /
 COPY --link --from=base-build-freetype			/out /
 COPY --link --from=base-build-glib				/out /
@@ -640,10 +640,10 @@ RUN meson install -C build/ --destdir /out
 # cairo <<<
 FROM base-build AS base-build-cairo
 #WORKDIR /src/cairo
-#RUN wget -q https://cairographics.org/releases/cairo-1.18.4.tar.xz -O - | tar xJ --strip-components=1
+#RUN wget -q https://cairographics.org/releases/cairo-1.18.6.tar.xz -O - | tar xJ --strip-components=1
 # cairographics.org is unreliable: self-hosted, see make mirror_distfile
-ADD --unpack --checksum=sha256:445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb https://cftcl.cyanogilvie.com/distfiles/cairo-1.18.4.tar.xz /src
-WORKDIR /src/cairo-1.18.4
+ADD --unpack --checksum=sha256:1c767308174337a74694da0f3ec069c271452163a1ef4540964c50c301f157d4 https://cftcl.cyanogilvie.com/distfiles/cairo-1.18.6.tar.xz /src
+WORKDIR /src/cairo-1.18.6
 COPY --link --from=base-build-expat				/out /
 COPY --link --from=base-build-fontconfig		/out /
 COPY --link --from=base-build-freebidi			/out /
@@ -989,8 +989,8 @@ RUN make test && make DESTDIR=/out install-tm
 # package-prng >>>
 # package-sqlite3 <<<
 FROM tcl-build-base AS package-sqlite3
-ADD --unpack https://sqlite.org/2026/sqlite-autoconf-3530100.tar.gz /src
-WORKDIR /src/sqlite-autoconf-3530100/tea
+ADD --unpack https://sqlite.org/2026/sqlite-autoconf-3540100.tar.gz /src
+WORKDIR /src/sqlite-autoconf-3540100/tea
 #RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}"
 RUN ./configure CFLAGS="${CFLAGS_ARCH} -Wno-stringop-overread" LDFLAGS="${LDFLAGS_ARCH}"
 RUN make DESTDIR=/out install
