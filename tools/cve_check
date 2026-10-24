@@ -1,0 +1,504 @@
+#!/usr/bin/env tclsh
+# cve_check — report known vulnerabilities in the third-party sources the
+# Dockerfile builds, by asking OSV.dev about the exact commit each pin
+# resolves to.
+#
+#   /opt/tcl9/bin/tclsh tools/cve_check ?-dockerfile PATH? ?-json PATH? ?-own?
+#
+# Each pin (git clone -b, GitHub/GitLab archive and release URLs, and the
+# tarballs mapped to git repos in tarball_repos below) is resolved to a
+# commit with git ls-remote, along with the newest stable release (or the
+# default branch HEAD, for commit pins).  OSV is asked about both, which
+# splits the findings into:
+#
+#   FIXED  affects the pin but not the newest stable release: bump the pin
+#   OPEN   affects the newest stable release too: no fix is released yet, or
+#          OSV's affected range is too coarse to tell
+#
+# Which releases are stable comes from Repology, which classifies each
+# project's versions from distro packaging (GNOME's x.90 development series,
+# ncurses snapshots and the like are "devel" there).  The newest stable
+# release is the newest tag of the same form as the pin that's no newer than
+# Repology's stable version, and never older than the pin.  Projects
+# Repology doesn't know fall back to the newest tag of the same form, marked
+# "stability unknown".  Repology asks for at most one API request a second,
+# so those lookups take most of the run time.
+#
+# Sources that can't be resolved to a commit are listed at the end, so the
+# coverage gaps stay visible.  Our own repos (cyanogilvie, RubyLane) are
+# skipped unless -own is given: OSV has nothing on them, and the code they
+# vendor isn't checked here (yet).
+#
+# -json writes the findings as JSON as well, for scheduled runs to diff.
+#
+# Exits 1 if anything is FIXED upstream, 0 otherwise.
+
+package require Tcl 9
+package require parse_args
+package require rl_json
+
+namespace import ::parse_args::parse_args
+namespace import ::rl_json::json
+
+set repo_root	[file dirname [file dirname [file normalize [info script]]]]
+
+parse_args $argv [list \
+	-dockerfile	[list -default [file join $repo_root Dockerfile]] \
+	-json		{} \
+	-own		{-boolean} \
+]
+
+# Tarballs not fetched from a git forge: name → {repo tagcmd}, where tagcmd
+# is a lambda that turns the tarball's version into the repo's release tag.
+# OSV matches by commit hash, so any mirror with the same history will do.
+set tarball_repos {
+	autoconf		{https://git.savannah.gnu.org/git/autoconf.git		{v {string cat v $v}}}
+	freetype		{https://gitlab.freedesktop.org/freetype/freetype	{v {string cat VER- [string map {. -} $v]}}}
+	ncurses			{https://github.com/ThomasDickey/ncurses-snapshots	{v {string cat v [string map {. _} $v]}}}
+	zlib			{https://github.com/madler/zlib						{v {string cat v $v}}}
+	libpng			{https://github.com/pnggroup/libpng					{v {string cat v $v}}}
+	readline		{https://git.savannah.gnu.org/git/readline.git		{v {string cat readline- $v}}}
+	libwebp			{https://github.com/webmproject/libwebp				{v {string cat v $v}}}
+	gperf			{https://git.savannah.gnu.org/git/gperf.git			{v {string cat v $v}}}
+	gettext			{https://git.savannah.gnu.org/git/gettext.git		{v {string cat v $v}}}
+	make			{https://git.savannah.gnu.org/git/make.git			{v {string cat $v}}}
+	glib			{https://gitlab.gnome.org/GNOME/glib				{v {string cat $v}}}
+	pixman			{https://gitlab.freedesktop.org/pixman/pixman		{v {string cat pixman- $v}}}
+	cairo			{https://gitlab.freedesktop.org/cairo/cairo			{v {string cat $v}}}
+	imlib2			{https://git.enlightenment.org/old/legacy-imlib2.git	{v {string cat v $v}}}
+	sqlite-autoconf	{https://github.com/sqlite/sqlite					{v {
+		# 3530100 → version-3.53.1
+		scan $v %1d%2d%2d%2d major minor patch sub
+		string cat version- $major.$minor.$patch [expr {$sub ? ".$sub" : ""}]
+	}}}
+}
+
+set own_owners	{cyanogilvie RubyLane}
+
+# Repology project names, where they differ from ours
+set repology_names {
+	libexpat		expat
+	libtiff			tiff
+	sqlite-autoconf	sqlite
+	thread			tcl-thread
+}
+
+set user_agent	{alpine-tcl-cve_check (+https://github.com/cyanogilvie/alpine-tcl)}
+
+# Map a source URL to what's needed to find its commit: a dict with repo and
+# either ref (a tag) or commit, or with note saying why it can't be checked.
+proc classify url {
+	global tarball_repos
+
+	switch -regexp -matchvar m -- $url {
+		{^https://github\.com/([^/]+/[^/]+)/archive/(?:refs/tags/)?(.+)\.(?:tar\.gz|tar\.xz|zip)$} {
+			lassign $m - path ref
+			set repo	https://github.com/$path
+			if {[regexp {^[0-9a-f]{40}$} $ref]} {
+				return [dict create repo $repo commit $ref]
+			}
+			if {[regexp {^[0-9a-f]{7,39}$} $ref]} {
+				return [dict create repo $repo note "abbreviated commit $ref"]
+			}
+			return [dict create repo $repo ref $ref]
+		}
+		{^https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)/} {
+			return [dict create repo https://github.com/[lindex $m 1] ref [lindex $m 2]]
+		}
+		{^(https://gitlab\.[^/]+/.+?)/-/archive/([^/]+)/} {
+			return [dict create repo [lindex $m 1] ref [lindex $m 2]]
+		}
+		{^https://core\.tcl-lang\.org/(tcl|thread)/tarball/([^/]+)/} {
+			lassign $m - project ref
+			if {[regexp {^[0-9a-f]+$} $ref]} {
+				return [dict create note "fossil check-in $ref"]
+			}
+			return [dict create repo https://github.com/tcltk/$project ref $ref]
+		}
+	}
+
+	if {
+		[regexp {([^/]+?)-(\d[\w.]*?)\.tar\.(?:gz|xz|bz2)$} $url - name version] &&
+		[dict exists $tarball_repos $name]
+	} {
+		lassign [dict get $tarball_repos $name] repo tagcmd
+		return [dict create name $name repo $repo ref [apply $tagcmd $version]]
+	}
+
+	dict create note "no git repo known for this source"
+}
+
+# The pinned sources in the Dockerfile, deduplicated, as classify dicts with
+# line, src and name added.
+proc pins dockerfile {
+	set pins	{}
+	set seen	{}
+	set fh		[open $dockerfile]
+	try {
+		set lineno	0
+		while {[gets $fh line] >= 0} {
+			incr lineno
+			if {[regexp {^\s*#} $line]} continue
+
+			if {[regexp {\mgit clone\M} $line] && [regexp {https?://\S+} $line url]} {
+				if {![regexp {(?:\s-b|--branch)\s+(\S+)} $line - ref]} {
+					set pin	[dict create repo $url note "clone of the default branch"]
+				} else {
+					set pin	[dict create repo $url ref $ref]
+				}
+			} elseif {
+				[regexp {^\s*(?:ADD\s|RUN\s.*\m(?:wget|curl)\M)} $line] &&
+				[regexp {https?://[^\s"';|]+} $line url]
+			} {
+				set pin	[classify $url]
+			} else {
+				continue
+			}
+
+			if {![dict exists $pin name]} {
+				set from	[expr {[dict exists $pin repo] ? [dict get $pin repo] : $url}]
+				dict set pin name [regsub {\.git$} [file tail $from] {}]
+			}
+			set key	[dict remove $pin line]
+			if {$key in $seen} continue
+			lappend seen $key
+			lappend pins [dict merge $pin [dict create line $lineno src $url]]
+		}
+	} finally {
+		close $fh
+	}
+	set pins
+}
+
+# Resolve the tags and HEAD of each repo, with all the git ls-remotes running
+# at once.  Returns repo → {head sha tags {tag sha ...}} or {error msg}.
+proc ls_remote repos {
+	set ::env(GIT_TERMINAL_PROMPT)	0		;# A missing repo shouldn't prompt for credentials
+	set chans	{}
+	foreach repo $repos {
+		dict set chans $repo [open |[list git ls-remote $repo HEAD refs/tags/* 2>/dev/null]]
+	}
+
+	set res	{}
+	dict for {repo chan} $chans {
+		set out	[read $chan]
+		try {
+			close $chan
+		} on error {} {
+			dict set res $repo [dict create error "git ls-remote failed"]
+			continue
+		}
+		set head	{}
+		set tags	{}
+		foreach line [split [string trim $out] \n] {
+			lassign [split $line \t] sha ref
+			if {$ref eq "HEAD"} {
+				set head	$sha
+			} elseif {[regexp {^refs/tags/(.+)\^\{\}$} $ref - tag]} {
+				dict set tags $tag $sha		;# The peeled commit of an annotated tag
+			} elseif {[regexp {^refs/tags/(.+)$} $ref - tag] && ![dict exists $tags $tag]} {
+				dict set tags $tag $sha
+			}
+		}
+		dict set res $repo [dict create head $head tags $tags]
+	}
+	set res
+}
+
+proc vcmp {a b} {
+	foreach x $a y $b {
+		if {$x eq ""} {return -1}
+		if {$y eq ""} {return 1}
+		if {$x != $y} {return [expr {$x < $y ? -1 : 1}]}
+	}
+	return 0
+}
+
+proc digits v {regexp -all -inline {\d+} $v}
+
+# The newest tag with the same form as ref (the same prefix and suffix around
+# a run of numbers, so v1.2.1 → v1.3.0 but not v1.3.0-rc1 or
+# go/brotli/v1.3.0), and if ceiling is given, no newer than that version.
+# Never older than ref.
+proc newest_like {tags ref {ceiling {}}} {
+	regexp {^(\D*).*?(\D*)$} $ref - prefix suffix
+	set quote	{s {regsub -all {[][{}()*+?.\\^$|]} $s {\\&}}}
+	set re		[string cat ^ [apply $quote $prefix] {\d+(?:[._-]\d+)*} [apply $quote $suffix] $]
+	set best	$ref
+	set bestv	[digits $ref]
+	foreach tag [dict keys $tags] {
+		if {![regexp $re $tag]} continue
+		set v	[digits $tag]
+		if {$ceiling ne "" && [vcmp $v [digits $ceiling]] > 0} continue
+		if {[vcmp $v $bestv] > 0} {
+			set best	$tag
+			set bestv	$v
+		}
+	}
+	set best
+}
+
+# The newest version of project that Repology classes as stable ("newest",
+# as opposed to "devel"), or "" if Repology doesn't know it
+proc repology_stable project {
+	global user_agent
+	after 1000		;# Repology's API rate limit
+	set resp	[exec curl -sS --fail -A $user_agent https://repology.org/api/v1/project/$project]
+	set best	{}
+	foreach pkg [json get $resp] {
+		if {[dict get $pkg status] ne "newest"} continue
+		set v	[dict get $pkg version]
+		if {$best eq "" || [vcmp [digits $v] [digits $best]] > 0} {
+			set best	$v
+		}
+	}
+	set best
+}
+
+proc osv_querybatch commits {
+	set body	{{"queries":[]}}
+	foreach commit $commits {
+		json set body queries end+1 [json template {{"commit":"~S:c"}} [dict create c $commit]]
+	}
+	set resp	[exec curl -sS --fail -H {Content-Type: application/json} \
+		--data-binary @- https://api.osv.dev/v1/querybatch << $body]
+
+	set res	{}
+	foreach commit $commits result [json get $resp results] {
+		dict set res $commit [lmap v [expr {[dict exists $result vulns] ? [dict get $result vulns] : {}}] {
+			dict get $v id
+		}]
+	}
+	set res
+}
+
+# Fetch the full records for ids, in parallel.  Returns id → record json.
+proc osv_vulns ids {
+	if {[llength $ids] == 0} {return {}}
+	set dir	[file tempdir]
+	try {
+		set args	{}
+		foreach id $ids {
+			lappend args -o [file join $dir $id.json] https://api.osv.dev/v1/vulns/$id
+		}
+		exec curl -sS --fail --parallel --parallel-max 16 {*}$args
+
+		set res	{}
+		foreach id $ids {
+			set fh	[open [file join $dir $id.json]]
+			try {
+				dict set res $id [read $fh]
+			} finally {
+				close $fh
+			}
+		}
+		set res
+	} finally {
+		file delete -force $dir
+	}
+}
+
+proc jget {rec path {default {}}} {
+	if {![json exists $rec {*}$path]} {return $default}
+	json get $rec {*}$path
+}
+
+# OSV often returns the same vulnerability from several databases (CVE-…,
+# GHSA-…, PYSEC-…): group them under the CVE id when there is one.
+proc canonical {id rec} {
+	foreach alias [list $id {*}[jget $rec aliases]] {
+		if {[string match CVE-* $alias]} {return $alias}
+	}
+	set id
+}
+
+proc summary rec {
+	set s	[jget $rec summary]
+	if {$s eq ""} {
+		set s	[lindex [split [string trim [jget $rec details]] \n] 0]
+	}
+	if {[string length $s] > 90} {
+		set s	[string range $s 0 86]...
+	}
+	set s
+}
+
+set pins	[pins $dockerfile]
+
+# Split out what can't be checked
+set checked		{}
+set unchecked	{}
+set own_skipped	{}
+foreach pin $pins {
+	if {
+		!$own &&
+		[dict exists $pin repo] &&
+		[regexp {^https://github\.com/([^/]+)/} [dict get $pin repo] - owner] &&
+		$owner in $own_owners
+	} {
+		lappend own_skipped [dict get $pin name]
+	} elseif {[dict exists $pin note]} {
+		lappend unchecked $pin
+	} else {
+		lappend checked $pin
+	}
+}
+
+set remotes	[ls_remote [lsort -unique [lmap pin $checked {dict get $pin repo}]]]
+
+# Find each pin's commit and the newest release to compare it with
+set resolved	{}
+foreach pin $checked {
+	set remote	[dict get $remotes [dict get $pin repo]]
+	if {[dict exists $remote error]} {
+		lappend unchecked [dict merge $pin [dict create note [dict get $remote error]]]
+		continue
+	}
+	set tags	[dict get $remote tags]
+	if {[dict exists $pin commit]} {
+		dict set pin pinned	[string range [dict get $pin commit] 0 11]
+		dict set pin newest	HEAD
+		dict set pin newest_commit	[dict get $remote head]
+	} else {
+		set ref	[dict get $pin ref]
+		if {![dict exists $tags $ref]} {
+			lappend unchecked [dict merge $pin [dict create note "tag $ref not found in [dict get $pin repo]"]]
+			continue
+		}
+		set name	[dict get $pin name]
+		set stable	[repology_stable [dict getdef $repology_names $name $name]]
+		dict set pin pinned	$ref
+		dict set pin commit	[dict get $tags $ref]
+		dict set pin stable	$stable
+		dict set pin newest	[newest_like $tags $ref $stable]
+		dict set pin newest_commit	[dict get $tags [dict get $pin newest]]
+	}
+	lappend resolved $pin
+}
+
+set commits	[lsort -unique [concat {*}[lmap pin $resolved {
+	list [dict get $pin commit] [dict get $pin newest_commit]
+}]]]
+set found	[osv_querybatch $commits]
+set records	[osv_vulns [lsort -unique [concat {*}[dict values $found]]]]
+
+# Group each pin's findings by canonical id, and mark the ones the newest
+# release doesn't have
+set report	{}
+set nfixed	0
+foreach pin $resolved {
+	set at_newest	[lmap id [dict get $found [dict get $pin newest_commit]] {
+		canonical $id [dict get $records $id]
+	}]
+	set vulns	{}
+	foreach id [dict get $found [dict get $pin commit]] {
+		set rec	[dict get $records $id]
+		set cid	[canonical $id $rec]
+		if {![dict exists $vulns $cid]} {
+			dict set vulns $cid [dict create \
+				fixed		[expr {$cid ni $at_newest}] \
+				summary		[summary $rec] \
+				published	[string range [jget $rec published] 0 9] \
+				ids			{} \
+			]
+		}
+		if {$cid ne $id} {dict lappend vulns $cid ids $id}
+		if {[dict get $vulns $cid summary] eq ""} {dict set vulns $cid summary [summary $rec]}
+	}
+	set fixed	[llength [lmap {cid v} $vulns {if {![dict get $v fixed]} continue; set cid}]]
+	incr nfixed $fixed
+	lappend report [dict merge $pin [dict create vulns $vulns nfixed $fixed]]
+}
+
+# Pins with something fixed upstream first, then the ones with open issues
+set report	[lsort -command {apply {{a b} {
+	foreach k {nfixed vulns} {
+		set x	[expr {$k eq "vulns" ? [dict size [dict get $a $k]] : [dict get $a $k]}]
+		set y	[expr {$k eq "vulns" ? [dict size [dict get $b $k]] : [dict get $b $k]}]
+		if {$x != $y} {return [expr {$x > $y ? -1 : 1}]}
+	}
+	string compare [dict get $a name] [dict get $b name]
+}}} $report]
+
+set clean	{}
+foreach pin $report {
+	set newer	[expr {[dict get $pin newest_commit] ne [dict get $pin commit] ? " → [dict get $pin newest]" : ""}]
+	if {[dict exists $pin ref]} {
+		set stable	[dict get $pin stable]
+		if {$stable eq ""} {
+			append newer " (stability unknown)"
+		} elseif {[vcmp [digits $stable] [digits [dict get $pin newest]]] > 0} {
+			# No tag here for it: the repo is behind (or not where upstream releases now)
+			append newer " (Repology stable $stable)"
+		}
+	}
+	if {[dict size [dict get $pin vulns]] == 0} {
+		lappend clean "[dict get $pin name] [dict get $pin pinned]$newer"
+		continue
+	}
+	puts "[dict get $pin name] [dict get $pin pinned]$newer  (Dockerfile:[dict get $pin line])"
+	dict for {cid v} [dict get $pin vulns] {
+		puts [format {  %-5s  %-16s  %-10s  %s} \
+			[expr {[dict get $v fixed] ? "FIXED" : "OPEN"}] \
+			$cid [dict get $v published] [dict get $v summary]]
+	}
+	puts ""
+}
+
+puts "No known vulnerabilities ([llength $clean]): [join $clean {, }]\n"
+if {[llength $unchecked]} {
+	puts "Not checked ([llength $unchecked]):"
+	foreach pin [lsort -command {apply {{a b} {expr {[dict get $a line] - [dict get $b line]}}}} $unchecked] {
+		puts [format {  Dockerfile:%-5s %-16s %s} [dict get $pin line] [dict get $pin name] [dict get $pin note]]
+	}
+	puts ""
+}
+if {[llength $own_skipped]} {
+	puts "Skipped [llength $own_skipped] of our own repos (use -own to include them)"
+}
+
+if {[info exists json]} {
+	set doc	{{"checked":[],"unchecked":[]}}
+	foreach pin $report {
+		set vulns	{[]}
+		dict for {cid v} [dict get $pin vulns] {
+			json set vulns end+1 [json template {{
+				"id":			"~S:id",
+				"aliases":		"~J:aliases",
+				"fixed_upstream":	"~B:fixed",
+				"published":	"~S:published",
+				"summary":		"~S:summary"
+			}} [dict merge $v [dict create \
+				id		$cid \
+				aliases	[json new array {*}[lmap id [dict get $v ids] {list string $id}]] \
+			]]]
+		}
+		json set doc checked end+1 [json template {{
+			"name":				"~S:name",
+			"line":				"~N:line",
+			"repo":				"~S:repo",
+			"pinned":			"~S:pinned",
+			"commit":			"~S:commit",
+			"repology_stable":	"~S:stable",
+			"newest":			"~S:newest",
+			"newest_commit":	"~S:newest_commit",
+			"vulns":			"~J:vulns"
+		}} [dict merge $pin [dict create vulns $vulns]]]
+	}
+	foreach pin $unchecked {
+		json set doc unchecked end+1 [json template {{
+			"name":	"~S:name",
+			"line":	"~N:line",
+			"src":	"~S:src",
+			"note":	"~S:note"
+		}} $pin]
+	}
+	set fh	[open $json w]
+	try {
+		puts $fh [json pretty $doc]
+	} finally {
+		close $fh
+	}
+}
+
+exit [expr {$nfixed > 0}]
