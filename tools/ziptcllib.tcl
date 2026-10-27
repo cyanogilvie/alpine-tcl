@@ -8,11 +8,22 @@ chantricks with_chan h {file tempfile tmpfn} {
 	try {
 		puts -nonewline $h [string map [list %tail% [list $tail]] {
 			# zipfs mounts are process-wide: another thread may have mounted it
-			# already, but this interp still needs the package ifneeded entries
-			if {![dict exists [zipfs mount] [file join [zipfs root] %tail%]]} {
-				zipfs mount [info script] %tail%
-			}
+			# already (or be mounting it right now), but this interp still needs
+			# the package ifneeded entries.  If Thread is loaded, serialise the
+			# check and mount on a process-wide lock (tsv::lock on a dedicated
+			# shared array) without making Thread a dependency
 			set dir	[file join [zipfs root] %tail%]
+			set mount {
+				if {![dict exists [zipfs mount] $dir]} {
+					zipfs mount [info script] %tail%
+				}
+			}
+			if {[llength [info commands ::tsv::lock]]} {
+				tsv::lock _tcllib_zipfs_mount $mount
+			} else {
+				eval $mount
+			}
+			unset mount
 			source [file join $dir pkgIndex.tcl]
 		}]
 		puts -nonewline $h \x1A

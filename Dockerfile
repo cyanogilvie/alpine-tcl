@@ -250,7 +250,7 @@ TCL_STUB_LIB_SPEC="-L/bootstrap/lib -ltclstub"
 EOF
 RUN mkdir -p /tmp/bootstrap/aws \
  && cd /tmp/bootstrap/aws \
- && git clone --recurse-submodules --shallow-submodules --branch v2.0a39 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
+ && git clone --recurse-submodules --shallow-submodules --branch v2.0a40 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl . \
  && meson setup build --prefix=/bootstrap -Dtm_mode=ziplet --buildtype=release --strip \
  && meson install -C build \
  && mkdir -p /tmp/bootstrap/tclsignal \
@@ -1432,7 +1432,7 @@ COPY --link --from=package-s2n			/out /
 COPY --link --from=package-chantricks	/out /
 COPY --link --from=package-tomcrypt		/out /
 COPY --link --from=package-cbor			/out /
-RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a39 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
+RUN git clone --recurse-submodules --shallow-submodules --branch v2.0a40 --single-branch --depth 1 https://github.com/cyanogilvie/aws-tcl .
 RUN ldconfig || true
 RUN meson setup builddir --buildtype=release -Ddebug=true -Dtm_mode=brlet
 RUN meson install -C builddir --destdir /out --skip-subprojects
