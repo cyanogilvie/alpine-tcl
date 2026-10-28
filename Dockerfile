@@ -1150,7 +1150,7 @@ FROM package-cbor-tcl${TCLVER} AS package-cbor
 # package-hash <<<
 FROM tcl-build-base AS package-hash
 WORKDIR /src/hash
-RUN git clone -b v0.4.1 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/hash .
+RUN git clone -b v0.4.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/hash .
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-hash >>>
