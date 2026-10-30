@@ -972,7 +972,7 @@ RUN meson install -C builddir --destdir /out
 # package-rltest <<<
 FROM tcl-build-base AS package-rltest
 WORKDIR /src/rltest
-RUN git clone -b v1.5.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rltest .
+RUN git clone -b v1.5.4 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rltest .
 RUN make DESTDIR=/out install-tm
 # pacakge-rltest >>>
 # package-names <<<
@@ -1314,7 +1314,7 @@ RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp -a tm/tcl/* /out/usr/local/l
 # package-evlog <<<
 FROM tbuild-base AS package-evlog
 WORKDIR /src/evlog
-RUN git clone --recurse-submodules --shallow-submodules --branch v0.3.1 --single-branch --depth 1 https://github.com/cyanogilvie/evlog .
+RUN git clone --recurse-submodules --shallow-submodules --branch v0.3.2 --single-branch --depth 1 https://github.com/cyanogilvie/evlog .
 RUN tbuild-lite
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl8/site-tcl/
 RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/tcl9/site-tcl/
@@ -1355,7 +1355,7 @@ RUN mkdir -p /out/usr/local/lib/tcl9/site-tcl && cp tm/tcl/* /out/usr/local/lib/
 FROM tbuild-base AS package-m2
 WORKDIR /src/m2
 #RUN git clone --recurse-submodules --shallow-submodules --branch v0.43.15 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
-RUN git clone --branch v0.43.17 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
+RUN git clone --branch v0.43.18 --single-branch --depth 1 https://github.com/cyanogilvie/m2 .
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && \
 	mkdir -p /out/usr/local/lib/tcl9/site-tcl && \
 	tbuild-lite build_tm m2 && \
