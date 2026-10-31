@@ -911,8 +911,8 @@ RUN make DESTDIR=/out install-binaries install-libraries clean
 
 # package-jitc <<<
 FROM tcl-build-base AS package-jitc
-ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.7/jitc-v0.8.7.tar.gz /src
-WORKDIR /src/jitc-v0.8.7
+ADD --unpack https://github.com/cyanogilvie/jitc/releases/download/v0.8.8/jitc-v0.8.8.tar.gz /src
+WORKDIR /src/jitc-v0.8.8
 RUN CXXFLAGS="" meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out --tags runtime
 # package-jitc >>>
