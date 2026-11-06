@@ -406,8 +406,11 @@ RUN make install DESTDIR=/out
 # ncurses >>>
 # zlib <<<
 FROM base-build AS base-build-zlib
-ADD --unpack https://zlib.net/zlib-1.3.2.tar.gz /src
-WORKDIR /src/zlib-1.3.2
+# zlib.net only keeps the latest release at the top level (older ones move to
+# /fossils/), so fetch from the GitHub release, checked against zlib.net's
+# published SHA-256
+ADD --unpack --checksum=sha256:02dd159783677a749c04adbdd02b55b8a2bcc7e054f51b76b549199a916ad584 https://github.com/madler/zlib/releases/download/v1.4/zlib-1.4.tar.gz /src
+WORKDIR /src/zlib-1.4
 RUN CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" ./configure --prefix=/usr/local --static
 RUN make -j
 RUN make install DESTDIR=/out
@@ -1187,8 +1190,8 @@ RUN meson install -C builddir --destdir /out
 # package-type >>>
 # package-filewatch <<<
 FROM tcl-build-base AS package-filewatch
-ADD --unpack https://github.com/cyanogilvie/filewatch/releases/download/v2.4/filewatch-v2.4.tar.gz /src
-WORKDIR /src/filewatch-v2.4
+ADD --unpack https://github.com/cyanogilvie/filewatch/releases/download/v2.4.2/filewatch-v2.4.2.tar.gz /src
+WORKDIR /src/filewatch-v2.4.2
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-filewatch >>>
