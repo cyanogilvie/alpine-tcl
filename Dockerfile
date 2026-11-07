@@ -5,7 +5,7 @@ ARG TCLCOPYTARGET=optimized
 # Alpine linux <<<
 #FROM alpine:3.20.3 AS src-alpine
 #FROM alpine:3.22.2 AS src-alpine
-FROM public.ecr.aws/docker/library/alpine:3.23.4 AS src-alpine
+FROM public.ecr.aws/docker/library/alpine:3.24.4 AS src-alpine
 RUN apk upgrade --no-cache --update
 ENV LANG=en_US.UTF-8
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
@@ -226,8 +226,8 @@ RUN ./configure.py --bootstrap
 #RUN ./ninja all
 RUN cp ninja /out/usr/local/bin/
 
-ADD --unpack https://github.com/mesonbuild/meson/archive/refs/tags/1.11.1.tar.gz /src
-WORKDIR /src/meson-1.11.1
+ADD --unpack https://github.com/mesonbuild/meson/archive/refs/tags/1.11.2.tar.gz /src
+WORKDIR /src/meson-1.11.2
 RUN ./packaging/create_zipapp.py --outfile /out/usr/local/bin/meson --interpreter '/usr/bin/env python3' .
 # ninja and meson >>>
 # Tcl bootstrap <<<
@@ -370,8 +370,8 @@ RUN make install DESTDIR=/out
 # jpeg-turbo <<<
 FROM base-build AS base-build-jpeg-turbo
 COPY --link --from=base-build-ninja				/out /
-ADD --unpack https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.4.1/libjpeg-turbo-3.1.4.1.tar.gz /src
-WORKDIR /src/libjpeg-turbo-3.1.4.1/builddir
+ADD --unpack https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.1/libjpeg-turbo-3.2.1.tar.gz /src
+WORKDIR /src/libjpeg-turbo-3.2.1/builddir
 RUN CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" cmake -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib -DENABLE_SHARED=OFF -DWITH_TESTS=OFF -DWITH_TOOLS=OFF -DWITH_TURBOJPEG=OFF -DWITH_JPEG8=ON -DWITH_JPEG7=ON ..
 RUN DESTDIR=/out ninja install
 # jpeg-turbo >>>
@@ -419,7 +419,7 @@ RUN make install DESTDIR=/out
 FROM base-build AS base-build-libpng
 # sourceforge blocks BuildKit's fetcher (see freetype above) — keep wget here
 WORKDIR /src/libpng
-RUN wget -q https://download.sourceforge.net/libpng/libpng-1.6.58.tar.gz -O - | tar xz --strip-components=1
+RUN wget -q https://download.sourceforge.net/libpng/libpng-1.6.59.tar.gz -O - | tar xz --strip-components=1
 COPY --link --from=base-build-zlib /out /
 RUN ./configure CFLAGS="${CFLAGS_ARCH}" LDFLAGS="${LDFLAGS_ARCH}" --disable-shared --enable-pic --disable-tests --disable-tools --enable-hardware-optimizations
 RUN make -j
@@ -505,8 +505,8 @@ RUN make install DESTDIR=/out && \
 # gettext >>>
 # expat <<<
 FROM base-build AS base-build-expat
-ADD --unpack https://github.com/libexpat/libexpat/releases/download/R_2_9_0/expat-2.9.0.tar.gz /src
-WORKDIR /src/expat-2.9.0
+ADD --unpack https://github.com/libexpat/libexpat/releases/download/R_2_10_0/expat-2.10.0.tar.gz /src
+WORKDIR /src/expat-2.10.0
 RUN ./configure --disable-shared --enable-pic --without-examples --without-tests --without-docbook
 RUN make -j
 RUN make install DESTDIR=/out
@@ -616,8 +616,8 @@ RUN meson install -C builddir --destdir /out
 # libart2 >>>
 # harfbuzz <<<
 FROM base-build AS base-build-harfbuzz
-ADD --unpack https://github.com/harfbuzz/harfbuzz/releases/download/15.0.0/harfbuzz-15.0.0.tar.xz /src
-WORKDIR /src/harfbuzz-15.0.0
+ADD --unpack https://github.com/harfbuzz/harfbuzz/releases/download/15.1.0/harfbuzz-15.1.0.tar.xz /src
+WORKDIR /src/harfbuzz-15.1.0
 COPY --link --from=base-build-ninja				/out /
 COPY --link --from=base-build-freetype			/out /
 COPY --link --from=base-build-glib				/out /
@@ -631,8 +631,8 @@ RUN meson install -C builddir --destdir /out
 # harfbuzz >>>
 # freefidi <<<
 FROM base-build AS base-build-freebidi
-ADD --unpack https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz /src
-WORKDIR /src/fribidi-1.0.16
+ADD --unpack https://github.com/fribidi/fribidi/releases/download/v1.0.18/fribidi-1.0.18.tar.xz /src
+WORKDIR /src/fribidi-1.0.18
 COPY --link --from=base-build-ninja		/out /
 RUN meson setup build/ --buildtype release --default-library static --optimization 2 --prefer-static \
 	-D docs=false \
@@ -716,9 +716,9 @@ RUN set > /tmp/vars
 # rsvg <<<
 FROM base-build-rust AS base-build-rsvg
 #WORKDIR /src/rsvg
-#RUN wget -q https://gitlab.gnome.org/GNOME/librsvg/-/archive/2.62.2/librsvg-2.62.2.tar.gz -O - | tar xz --strip-components=1
-ADD --unpack https://gitlab.gnome.org/GNOME/librsvg/-/archive/2.62.2/librsvg-2.62.2.tar.gz /src
-WORKDIR /src/librsvg-2.62.2
+#RUN wget -q https://gitlab.gnome.org/GNOME/librsvg/-/archive/2.62.4/librsvg-2.62.4.tar.gz -O - | tar xz --strip-components=1
+ADD --unpack https://gitlab.gnome.org/GNOME/librsvg/-/archive/2.62.4/librsvg-2.62.4.tar.gz /src
+WORKDIR /src/librsvg-2.62.4
 COPY --link --from=base-build-cairo				/out /
 COPY --link --from=base-build-expat				/out /
 COPY --link --from=base-build-fontconfig		/out /
@@ -764,7 +764,7 @@ RUN meson install -C build/ --destdir /out
 FROM base-build AS base-build-imlib2
 # sourceforge blocks BuildKit's fetcher (see freetype above) — keep wget here
 WORKDIR /src/imlib2
-RUN wget -q https://downloads.sourceforge.net/enlightenment/imlib2-1.12.6.tar.gz -O - | tar xz --strip-components=1
+RUN wget -q https://downloads.sourceforge.net/enlightenment/imlib2-1.12.7.tar.gz -O - | tar xz --strip-components=1
 COPY --link --from=base-build-freetype			/out /
 COPY --link --from=base-build-jpeg-turbo		/out /
 COPY --link --from=base-build-libexif			/out /
@@ -929,7 +929,7 @@ RUN meson install -C builddir --destdir /out
 # package-pgwire <<<
 FROM tcl-build-base AS package-pgwire
 WORKDIR /src/pgwire
-RUN git clone -b v3.0.0b41 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
+RUN git clone -b v3.0.0b42 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pgwire .
 WORKDIR /src/pgwire/src
 RUN make all
 RUN mkdir -p /out/usr/local/lib/tcl8/site-tcl && cp -a tm/* /out/usr/local/lib/tcl8/site-tcl
@@ -1688,7 +1688,7 @@ RUN /bootstrap/bin/tclsh /var/task/build_apk.tcl
 # Container image for the APKINDEX-regeneration Lambda created by the
 # bld/sam/pkgrepo stack. Alpine base picks up apk-tools + abuild-sign for
 # free; we just add curl/jq/aws-cli for the runtime-API loop and S3 I/O.
-FROM public.ecr.aws/docker/library/alpine:3.23.4 AS pkgrepo-index-lambda
+FROM public.ecr.aws/docker/library/alpine:3.24.4 AS pkgrepo-index-lambda
 RUN apk add --no-cache --update \
 	abuild \
 	apk-tools \
