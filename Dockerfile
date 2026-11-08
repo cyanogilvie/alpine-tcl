@@ -998,6 +998,13 @@ WORKDIR /src/sqlite-autoconf-3540100/tea
 RUN ./configure CFLAGS="${CFLAGS_ARCH} -Wno-stringop-overread" LDFLAGS="${LDFLAGS_ARCH}"
 RUN make DESTDIR=/out install
 # package-sqlite3 >>>
+# package-parse_args <<<
+FROM tcl-build-base AS package-parse_args
+ADD --unpack https://github.com/RubyLane/parse_args/releases/download/v0.7.2/parse_args-v0.7.2.tar.gz /src
+WORKDIR /src/parse_args-v0.7.2
+RUN meson setup builddir --buildtype=release -Ddebug=true
+RUN meson install -C builddir --destdir /out
+# package-parse_args >>>
 # package-pixel <<<
 # Pixel: v4.0 (meson, Tcl 9)
 #
@@ -1126,13 +1133,6 @@ RUN git clone -b cyan-0.9.6.11 --recurse-submodules --shallow-submodules --singl
 RUN meson setup builddir --buildtype=release -Ddebug=true -Dhtml5=enabled
 RUN meson install -C builddir --destdir /out --skip-subprojects
 # package-tdom >>>
-# package-parse_args <<<
-FROM tcl-build-base AS package-parse_args
-ADD --unpack https://github.com/RubyLane/parse_args/releases/download/v0.7.2/parse_args-v0.7.2.tar.gz /src
-WORKDIR /src/parse_args-v0.7.2
-RUN meson setup builddir --buildtype=release -Ddebug=true
-RUN meson install -C builddir --destdir /out
-# package-parse_args >>>
 # package-rl_json <<<
 FROM tcl-build-base AS package-rl_json
 ADD --unpack https://github.com/RubyLane/rl_json/releases/download/v0.17.8/rl_json-v0.17.8.tar.gz /src
