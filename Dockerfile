@@ -1010,7 +1010,7 @@ RUN make DESTDIR=/out install
 # them. Sub-packages inherit via `FROM package-pixel-core`.
 FROM tcl-build-base AS package-pixel-src
 WORKDIR /src/pixel
-RUN git clone -q -b v4.3.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pixel .
+RUN git clone -q -b v4.3.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pixel .
 
 FROM package-pixel-src AS package-pixel-core
 WORKDIR /src/pixel/pixel_core
@@ -1069,6 +1069,8 @@ RUN meson install -C builddir --destdir /out
 FROM package-pixel-src AS package-pixel-webp
 COPY --link --from=base-build-webp				/out /
 COPY --link --from=package-pixel-core			/out /
+# pixel::webp::encode binds its args through parse_args' stubs
+COPY --link --from=package-parse_args			/out /
 WORKDIR /src/pixel/pixel_webp
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
@@ -1199,10 +1201,17 @@ RUN meson install -C builddir --destdir /out
 FROM tcl-build-base AS package-parsetcl
 COPY --link --from=base-build-expat	/out /
 COPY --link --from=package-tdom		/out /
+# parsetcl's test deps: without them here meson falls back to its teabase
+# wraps (parse_args 0.6.3, rl_json 0.17.6), and installing those put their
+# packages and .pc files over the real ones in cftcl (0.10.41 shipped both).
+# --skip-subprojects so that no fallback can install anything
+COPY --link --from=package-parse_args	/out /
+COPY --link --from=package-rl_json		/out /
+COPY --link --from=package-type		/out /
 WORKDIR /src/parsetcl
 RUN git clone -q -b v0.4.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/parsetcl .
 RUN meson setup builddir --buildtype=release -Ddebug=true
-RUN meson install -C builddir --destdir /out
+RUN meson install -C builddir --destdir /out --skip-subprojects
 # package-parsetcl >>>
 # package-ck <<<
 FROM tcl-build-base AS package-ck
