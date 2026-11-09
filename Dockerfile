@@ -1017,7 +1017,7 @@ RUN meson install -C builddir --destdir /out
 # them. Sub-packages inherit via `FROM package-pixel-core`.
 FROM tcl-build-base AS package-pixel-src
 WORKDIR /src/pixel
-RUN git clone -q -b v4.3.3 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pixel .
+RUN git clone -q -b v4.3.4 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/cyanogilvie/pixel .
 
 FROM package-pixel-src AS package-pixel-core
 WORKDIR /src/pixel/pixel_core
