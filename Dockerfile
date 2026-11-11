@@ -1428,6 +1428,13 @@ RUN git clone --recurse-submodules --shallow-submodules --branch v1.8 --single-b
 RUN make test
 RUN make DESTDIR=/out install-tm
 # package-aio >>>
+# package-rl_ftp <<<
+FROM tcl-build-base AS package-rl_ftp
+WORKDIR /src/rl_ftp
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.0 --single-branch --depth 1 https://github.com/RubyLane/rl_ftp .
+RUN meson setup builddir --buildtype=release -Ddebug=true
+RUN meson install -C builddir --destdir /out
+# package-rl_ftp >>>
 # package-aws <<<
 FROM tcl-build-base AS package-aws
 WORKDIR /src/aws-tcl
@@ -1627,6 +1634,7 @@ COPY --link --from=package-m2				/out/usr/local	/out$TCLROOT
 COPY --link --from=package-tty				/out/usr/local	/out$TCLROOT
 COPY --link --from=package-flock			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-aio				/out/usr/local	/out$TCLROOT
+COPY --link --from=package-rl_ftp			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-aws				/out/usr/local	/out$TCLROOT
 COPY --link --from=aklomp-base64			/out/usr/local	/out$TCLROOT
 COPY --link --from=package-ip				/out/usr/local	/out$TCLROOT
@@ -1773,6 +1781,7 @@ COPY --link --from=package-m2				/out /
 COPY --link --from=package-tty				/out /
 COPY --link --from=package-flock			/out /
 COPY --link --from=package-aio				/out /
+COPY --link --from=package-rl_ftp			/out /
 COPY --link --from=package-aws				/out /
 COPY --link --from=aklomp-base64			/out /
 COPY --link --from=package-ip				/out /
@@ -1843,6 +1852,7 @@ COPY --link --from=package-m2			/src /src
 COPY --link --from=package-tty			/src /src
 COPY --link --from=package-flock		/src /src
 COPY --link --from=package-aio			/src /src
+COPY --link --from=package-rl_ftp		/src /src
 COPY --link --from=package-aws			/src /src
 COPY --link --from=aklomp-base64		/src /src
 #COPY --link --from=package-mtag_stack	/src /src

@@ -85,6 +85,7 @@ packages (most are from https://github.com/cyanogilvie or https://github.com/Rub
 - prng
 - resolve
 - reuri
+- rl_ftp
 - rl_http
 - rl_json
 - rltest

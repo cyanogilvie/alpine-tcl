@@ -16,6 +16,7 @@ set packages {
 	unix_sockets
 	{tcllib tcllib_source 1.20}
 	gc_class
+	rl_ftp
 	rl_http
 	sqlite3
 	cflib
