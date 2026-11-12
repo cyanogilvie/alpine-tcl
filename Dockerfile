@@ -953,7 +953,7 @@ RUN meson install -C builddir --destdir /out
 # package-rl_http <<<
 FROM tcl-build-base AS package-rl_http
 WORKDIR /src/rl_http
-RUN git clone -b 1.26 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
+RUN git clone -b 1.26.2 --recurse-submodules --shallow-submodules --single-branch --depth 1 https://github.com/RubyLane/rl_http .
 RUN meson setup builddir --buildtype=release -Ddebug=true
 RUN meson install -C builddir --destdir /out
 # package-rl_http >>>
