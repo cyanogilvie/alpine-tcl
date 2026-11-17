@@ -1487,7 +1487,7 @@ RUN cp include/libbase64.h /out/usr/local/include
 # package-ip <<<
 FROM tcl-build-base AS package-ip
 WORKDIR /src/ip
-RUN git clone --recurse-submodules --shallow-submodules --branch v1.6 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-ip .
+RUN git clone --recurse-submodules --shallow-submodules --branch v1.7 --single-branch --depth 1 https://github.com/cyanogilvie/tcl-ip .
 RUN make DESTDIR=/out install-tm
 # package-ip >>>
 
